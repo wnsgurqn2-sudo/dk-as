@@ -541,28 +541,40 @@ function generateSingleQR() {
         return;
     }
 
+    // QRCode 라이브러리 확인
+    if (typeof QRCode === 'undefined') {
+        showToast('QR 라이브러리 로딩 중... 잠시 후 다시 시도해주세요.', 'error');
+        return;
+    }
+
     const product = products.find(p => p.id === productId);
     const qrText = `${productId}_${status}`;
 
     const canvas = document.getElementById('qrCanvas');
 
-    QRCode.toCanvas(canvas, qrText, {
-        width: 200,
-        margin: 2,
-        color: {
-            dark: '#000000',
-            light: '#ffffff'
-        }
-    }, (error) => {
-        if (error) {
-            console.error(error);
-            showToast('QR코드 생성에 실패했습니다.', 'error');
-            return;
-        }
+    try {
+        QRCode.toCanvas(canvas, qrText, {
+            width: 200,
+            margin: 2,
+            color: {
+                dark: '#000000',
+                light: '#ffffff'
+            }
+        }, (error) => {
+            if (error) {
+                console.error('QR 생성 오류:', error);
+                showToast('QR코드 생성에 실패했습니다: ' + error.message, 'error');
+                return;
+            }
 
-        document.getElementById('qrPreview').style.display = 'block';
-        document.getElementById('qrText').textContent = `${product.name} - ${status}`;
-    });
+            document.getElementById('qrPreview').style.display = 'block';
+            document.getElementById('qrText').textContent = `${product.name} - ${status}`;
+            showToast('QR코드가 생성되었습니다.', 'success');
+        });
+    } catch (e) {
+        console.error('QR 생성 예외:', e);
+        showToast('QR코드 생성 오류: ' + e.message, 'error');
+    }
 }
 
 function downloadQR() {
@@ -582,6 +594,12 @@ function generateQRSheet() {
 
     if (selectedIds.length === 0) {
         showToast('제품을 선택해주세요.', 'error');
+        return;
+    }
+
+    // QRCode 라이브러리 확인
+    if (typeof QRCode === 'undefined') {
+        showToast('QR 라이브러리 로딩 중... 잠시 후 다시 시도해주세요.', 'error');
         return;
     }
 
@@ -608,10 +626,14 @@ function generateQRSheet() {
             itemDiv.appendChild(label);
             sheetDiv.appendChild(itemDiv);
 
-            QRCode.toCanvas(canvas, qrText, {
-                width: 100,
-                margin: 1
-            });
+            try {
+                QRCode.toCanvas(canvas, qrText, {
+                    width: 100,
+                    margin: 1
+                });
+            } catch (e) {
+                console.error('QR 시트 생성 오류:', e);
+            }
         });
     });
 
