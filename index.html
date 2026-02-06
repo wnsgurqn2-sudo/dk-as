@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DK AS - 임대제품 점검 시스템</title>
+
+    <!-- PWA 설정 -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="DK AS">
+
+    <!-- 앱 아이콘 -->
+    <link rel="icon" type="image/png" sizes="72x72" href="icons/icon-72x72.png">
+    <link rel="apple-touch-icon" href="icons/icon-72x72.png">
+
+    <link rel="stylesheet" href="styles.css">
+    <!-- QR Code 스캔 라이브러리 -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <!-- QR Code 생성 라이브러리 -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 헤더 -->
+        <header class="header">
+            <h1>DK AS</h1>
+            <p class="subtitle">임대제품 점검 시스템</p>
+        </header>
+
+        <!-- 탭 네비게이션 -->
+        <nav class="tab-nav">
+            <button class="tab-btn active" data-tab="dashboard">
+                <span class="tab-icon">📊</span>
+                <span class="tab-text">대시보드</span>
+            </button>
+            <button class="tab-btn" data-tab="scan">
+                <span class="tab-icon">📷</span>
+                <span class="tab-text">QR스캔</span>
+            </button>
+            <button class="tab-btn" data-tab="products">
+                <span class="tab-icon">📦</span>
+                <span class="tab-text">제품관리</span>
+            </button>
+            <button class="tab-btn" data-tab="qrcode">
+                <span class="tab-icon">🏷️</span>
+                <span class="tab-text">QR생성</span>
+            </button>
+        </nav>
+
+        <!-- 메인 컨텐츠 -->
+        <main class="main-content">
+            <!-- 대시보드 탭 -->
+            <section id="dashboard" class="tab-content active">
+                <div class="dashboard-header">
+                    <h2>점검 현황</h2>
+                    <div class="last-updated">
+                        최종 업데이트: <span id="lastUpdated">-</span>
+                    </div>
+                </div>
+
+                <!-- 통계 카드 -->
+                <div class="stats-container">
+                    <div class="stat-card total">
+                        <div class="stat-number" id="statTotal">0</div>
+                        <div class="stat-label">전체</div>
+                    </div>
+                    <div class="stat-card unchecked">
+                        <div class="stat-number" id="statUnchecked">0</div>
+                        <div class="stat-label">미점검</div>
+                    </div>
+                    <div class="stat-card broken">
+                        <div class="stat-number" id="statBroken">0</div>
+                        <div class="stat-label">고장</div>
+                    </div>
+                    <div class="stat-card cleaning">
+                        <div class="stat-number" id="statCleaning">0</div>
+                        <div class="stat-label">청소</div>
+                    </div>
+                    <div class="stat-card ready">
+                        <div class="stat-number" id="statReady">0</div>
+                        <div class="stat-label">출고준비</div>
+                    </div>
+                </div>
+
+                <!-- 진행률 바 -->
+                <div class="progress-section">
+                    <div class="progress-header">
+                        <span>점검 진행률</span>
+                        <span id="progressPercent">0%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                </div>
+
+                <!-- 필터 버튼 -->
+                <div class="filter-section">
+                    <button class="filter-btn active" data-filter="all">전체</button>
+                    <button class="filter-btn" data-filter="미점검">미점검</button>
+                    <button class="filter-btn" data-filter="고장">고장</button>
+                    <button class="filter-btn" data-filter="청소">청소</button>
+                    <button class="filter-btn" data-filter="출고준비완료">출고준비</button>
+                </div>
+
+                <!-- 제품 목록 -->
+                <div class="product-list" id="dashboardList">
+                    <div class="empty-state">
+                        등록된 제품이 없습니다.<br>
+                        제품관리 탭에서 제품을 등록해주세요.
+                    </div>
+                </div>
+            </section>
+
+            <!-- QR 스캔 탭 -->
+            <section id="scan" class="tab-content">
+                <h2>QR코드 스캔</h2>
+                <p class="scan-instruction">카메라로 QR코드를 스캔하면 제품 상태가 자동으로 업데이트됩니다.</p>
+
+                <div class="scanner-container">
+                    <div id="qr-reader"></div>
+                </div>
+
+                <div class="scan-result" id="scanResult" style="display: none;">
+                    <div class="result-header">스캔 결과</div>
+                    <div class="result-content">
+                        <div class="result-item">
+                            <span class="result-label">제품ID:</span>
+                            <span class="result-value" id="scannedProductId">-</span>
+                        </div>
+                        <div class="result-item">
+                            <span class="result-label">상태:</span>
+                            <span class="result-value" id="scannedStatus">-</span>
+                        </div>
+                        <div class="result-item">
+                            <span class="result-label">결과:</span>
+                            <span class="result-value" id="scanMessage">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="scan-history">
+                    <h3>최근 스캔 기록</h3>
+                    <div id="scanHistoryList" class="history-list">
+                        <div class="empty-state">스캔 기록이 없습니다.</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 제품 관리 탭 -->
+            <section id="products" class="tab-content">
+                <h2>제품 관리</h2>
+
+                <!-- 제품 등록 폼 -->
+                <div class="form-section">
+                    <h3>새 제품 등록</h3>
+                    <form id="productForm">
+                        <div class="form-group">
+                            <label for="productId">제품 ID *</label>
+                            <input type="text" id="productId" placeholder="예: P001" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="productName">제품명 *</label>
+                            <input type="text" id="productName" placeholder="예: 에어컨 A형" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="productCategory">카테고리</label>
+                            <input type="text" id="productCategory" placeholder="예: 에어컨">
+                        </div>
+                        <div class="form-group">
+                            <label for="productNote">비고</label>
+                            <input type="text" id="productNote" placeholder="추가 메모">
+                        </div>
+                        <button type="submit" class="btn-primary">제품 등록</button>
+                    </form>
+                </div>
+
+                <!-- 일괄 등록 -->
+                <div class="form-section">
+                    <h3>일괄 등록</h3>
+                    <p class="form-help">여러 제품을 한 번에 등록합니다. (한 줄에 하나씩, 형식: 제품ID,제품명,카테고리)</p>
+                    <div class="form-group">
+                        <textarea id="bulkInput" rows="5" placeholder="P001,에어컨 A형,에어컨&#10;P002,에어컨 B형,에어컨&#10;P003,제습기,제습기"></textarea>
+                    </div>
+                    <button type="button" class="btn-secondary" id="bulkRegisterBtn">일괄 등록</button>
+                </div>
+
+                <!-- 등록된 제품 목록 -->
+                <div class="form-section">
+                    <div class="section-header">
+                        <h3>등록된 제품 (<span id="productCount">0</span>개)</h3>
+                        <button type="button" class="btn-danger-small" id="deleteAllBtn">전체 삭제</button>
+                    </div>
+                    <div class="product-list" id="productList">
+                        <div class="empty-state">등록된 제품이 없습니다.</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- QR 생성 탭 -->
+            <section id="qrcode" class="tab-content">
+                <h2>QR코드 생성</h2>
+
+                <!-- 개별 QR 생성 -->
+                <div class="form-section">
+                    <h3>개별 QR코드 생성</h3>
+                    <div class="form-group">
+                        <label for="qrProductSelect">제품 선택</label>
+                        <select id="qrProductSelect">
+                            <option value="">제품을 선택하세요</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="qrStatusSelect">상태 선택</label>
+                        <select id="qrStatusSelect">
+                            <option value="미점검">미점검</option>
+                            <option value="고장">고장</option>
+                            <option value="청소">청소</option>
+                            <option value="출고준비완료">출고준비완료</option>
+                        </select>
+                    </div>
+                    <button type="button" class="btn-primary" id="generateQrBtn">QR코드 생성</button>
+
+                    <div class="qr-preview" id="qrPreview" style="display: none;">
+                        <canvas id="qrCanvas"></canvas>
+                        <p class="qr-text" id="qrText"></p>
+                        <button type="button" class="btn-secondary" id="downloadQrBtn">다운로드</button>
+                    </div>
+                </div>
+
+                <!-- QR시트 생성 -->
+                <div class="form-section">
+                    <h3>QR코드 시트 생성</h3>
+                    <p class="form-help">선택한 제품들의 모든 상태 QR코드를 일괄 생성합니다.</p>
+                    <div class="form-group">
+                        <label>제품 선택</label>
+                        <div class="checkbox-list" id="qrSheetProductList">
+                            <div class="empty-state">등록된 제품이 없습니다.</div>
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button type="button" class="btn-secondary" id="selectAllProductsBtn">전체 선택</button>
+                        <button type="button" class="btn-primary" id="generateSheetBtn">QR시트 생성</button>
+                    </div>
+                </div>
+
+                <!-- QR시트 미리보기 -->
+                <div class="qr-sheet-preview" id="qrSheetPreview" style="display: none;">
+                    <div class="sheet-header">
+                        <h3>QR코드 시트</h3>
+                        <button type="button" class="btn-primary" id="printSheetBtn">인쇄</button>
+                    </div>
+                    <div class="qr-sheet" id="qrSheet"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- 토스트 메시지 -->
+    <div class="toast" id="toast"></div>
+
+    <!-- 모달 -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal" id="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle">확인</h3>
+                <button class="modal-close" id="modalClose">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="modalCancel">취소</button>
+                <button class="btn-primary" id="modalConfirm">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        // Service Worker 등록
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./service-worker.js')
+                    .then((registration) => {
+                        console.log('Service Worker 등록 성공:', registration.scope);
+                    })
+                    .catch((error) => {
+                        console.log('Service Worker 등록 실패:', error);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>
