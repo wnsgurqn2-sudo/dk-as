@@ -550,27 +550,24 @@ function generateSingleQR() {
     const product = products.find(p => p.id === productId);
     const qrText = `${productId}_${status}`;
 
-    const canvas = document.getElementById('qrCanvas');
+    const qrContainer = document.getElementById('qrCanvas');
+
+    // 기존 QR 코드 삭제
+    qrContainer.innerHTML = '';
 
     try {
-        QRCode.toCanvas(canvas, qrText, {
+        new QRCode(qrContainer, {
+            text: qrText,
             width: 200,
-            margin: 2,
-            color: {
-                dark: '#000000',
-                light: '#ffffff'
-            }
-        }, (error) => {
-            if (error) {
-                console.error('QR 생성 오류:', error);
-                showToast('QR코드 생성에 실패했습니다: ' + error.message, 'error');
-                return;
-            }
-
-            document.getElementById('qrPreview').style.display = 'block';
-            document.getElementById('qrText').textContent = `${product.name} - ${status}`;
-            showToast('QR코드가 생성되었습니다.', 'success');
+            height: 200,
+            colorDark: '#000000',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.H
         });
+
+        document.getElementById('qrPreview').style.display = 'block';
+        document.getElementById('qrText').textContent = `${product.name} - ${status}`;
+        showToast('QR코드가 생성되었습니다.', 'success');
     } catch (e) {
         console.error('QR 생성 예외:', e);
         showToast('QR코드 생성 오류: ' + e.message, 'error');
@@ -578,13 +575,23 @@ function generateSingleQR() {
 }
 
 function downloadQR() {
-    const canvas = document.getElementById('qrCanvas');
+    const qrContainer = document.getElementById('qrCanvas');
     const productId = document.getElementById('qrProductSelect').value;
     const status = document.getElementById('qrStatusSelect').value;
 
+    // qrcodejs는 img와 canvas를 생성함
+    const img = qrContainer.querySelector('img');
+    const canvas = qrContainer.querySelector('canvas');
+
     const link = document.createElement('a');
     link.download = `QR_${productId}_${status}.png`;
-    link.href = canvas.toDataURL('image/png');
+
+    if (canvas) {
+        link.href = canvas.toDataURL('image/png');
+    } else if (img) {
+        link.href = img.src;
+    }
+
     link.click();
 }
 
@@ -617,19 +624,23 @@ function generateQRSheet() {
             const itemDiv = document.createElement('div');
             itemDiv.className = 'qr-sheet-item';
 
-            const canvas = document.createElement('canvas');
+            const qrDiv = document.createElement('div');
             const label = document.createElement('div');
             label.className = 'qr-label';
             label.textContent = `${product.name}\n${status}`;
 
-            itemDiv.appendChild(canvas);
+            itemDiv.appendChild(qrDiv);
             itemDiv.appendChild(label);
             sheetDiv.appendChild(itemDiv);
 
             try {
-                QRCode.toCanvas(canvas, qrText, {
+                new QRCode(qrDiv, {
+                    text: qrText,
                     width: 100,
-                    margin: 1
+                    height: 100,
+                    colorDark: '#000000',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.H
                 });
             } catch (e) {
                 console.error('QR 시트 생성 오류:', e);

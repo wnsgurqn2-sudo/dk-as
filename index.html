@@ -20,7 +20,7 @@
     <!-- QR Code 스캔 라이브러리 -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <!-- QR Code 생성 라이브러리 -->
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -224,7 +224,7 @@
                     <button type="button" class="btn-primary" id="generateQrBtn">QR코드 생성</button>
 
                     <div class="qr-preview" id="qrPreview" style="display: none;">
-                        <canvas id="qrCanvas"></canvas>
+                        <div id="qrCanvas"></div>
                         <p class="qr-text" id="qrText"></p>
                         <button type="button" class="btn-secondary" id="downloadQrBtn">다운로드</button>
                     </div>
