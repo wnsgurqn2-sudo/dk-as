@@ -61,6 +61,11 @@
                     </div>
                 </div>
 
+                <!-- 검색창 -->
+                <div class="search-section">
+                    <input type="text" id="dashboardSearch" class="search-input" placeholder="제품명, 제품ID, 업체명으로 검색...">
+                </div>
+
                 <!-- 통계 카드 -->
                 <div class="stats-container">
                     <div class="stat-card total">
@@ -98,11 +103,11 @@
 
                 <!-- 필터 버튼 -->
                 <div class="filter-section">
-                    <button class="filter-btn active" data-filter="all">전체</button>
-                    <button class="filter-btn" data-filter="미점검">미점검</button>
-                    <button class="filter-btn" data-filter="고장">고장</button>
-                    <button class="filter-btn" data-filter="청소">청소</button>
-                    <button class="filter-btn" data-filter="출고준비완료">출고준비</button>
+                    <button class="filter-btn active" data-filter="all">전체(<span id="filterCountAll">0</span>)</button>
+                    <button class="filter-btn" data-filter="미점검">미점검(<span id="filterCountUnchecked">0</span>)</button>
+                    <button class="filter-btn" data-filter="고장">고장(<span id="filterCountBroken">0</span>)</button>
+                    <button class="filter-btn" data-filter="청소">청소(<span id="filterCountCleaning">0</span>)</button>
+                    <button class="filter-btn" data-filter="출고준비완료">출고준비(<span id="filterCountReady">0</span>)</button>
                 </div>
 
                 <!-- 제품 목록 -->
@@ -117,34 +122,65 @@
             <!-- QR 스캔 탭 -->
             <section id="scan" class="tab-content">
                 <h2>QR코드 스캔</h2>
-                <p class="scan-instruction">카메라로 QR코드를 스캔하면 제품 상태가 자동으로 업데이트됩니다.</p>
+                <p class="scan-instruction">카메라로 제품 QR코드를 스캔하세요.</p>
 
                 <div class="scanner-container">
                     <div id="qr-reader"></div>
                 </div>
 
-                <div class="scan-result" id="scanResult" style="display: none;">
-                    <div class="result-header">스캔 결과</div>
-                    <div class="result-content">
-                        <div class="result-item">
-                            <span class="result-label">제품ID:</span>
-                            <span class="result-value" id="scannedProductId">-</span>
+                <!-- 스캔 후 액션 패널 -->
+                <div class="scan-action-panel" id="scanActionPanel" style="display: none;">
+                    <div class="scanned-product-info" id="scannedProductInfo">
+                        <h3 id="scannedProductName">제품명</h3>
+                        <p id="scannedProductDetails">제품ID | 카테고리 | 잔여시간</p>
+                        <p id="scannedRentalInfo" class="rental-info"></p>
+                    </div>
+
+                    <!-- 기본 버튼 (임대/임대회수) -->
+                    <div class="action-buttons" id="actionButtons">
+                        <button class="btn-action rental" id="btnRental">임대</button>
+                        <button class="btn-action return" id="btnReturn">임대회수</button>
+                    </div>
+
+                    <!-- 임대 폼 -->
+                    <div class="rental-form" id="rentalForm" style="display: none;">
+                        <div class="form-group">
+                            <label for="rentalCompany">업체명 *</label>
+                            <input type="text" id="rentalCompany" placeholder="임대 업체명 입력">
                         </div>
-                        <div class="result-item">
-                            <span class="result-label">상태:</span>
-                            <span class="result-value" id="scannedStatus">-</span>
+                        <div class="btn-group">
+                            <button class="btn-secondary" id="btnRentalCancel">취소</button>
+                            <button class="btn-primary" id="btnRentalSave">저장</button>
                         </div>
-                        <div class="result-item">
-                            <span class="result-label">결과:</span>
-                            <span class="result-value" id="scanMessage">-</span>
+                    </div>
+
+                    <!-- 임대회수 폼 -->
+                    <div class="return-form" id="returnForm" style="display: none;">
+                        <div class="form-group">
+                            <label for="usedHours">사용시간 (시간)</label>
+                            <input type="number" id="usedHours" placeholder="사용한 시간 입력" min="0">
+                            <p class="used-time-info" id="usedTimeInfo"></p>
+                        </div>
+                        <div class="form-group">
+                            <label for="returnNote">특이사항</label>
+                            <textarea id="returnNote" rows="3" placeholder="특이사항 입력"></textarea>
+                        </div>
+                        <div class="status-buttons">
+                            <button class="status-btn unchecked" data-status="미점검">미점검</button>
+                            <button class="status-btn broken" data-status="고장">고장</button>
+                            <button class="status-btn cleaning" data-status="청소">청소</button>
+                            <button class="status-btn ready" data-status="출고준비완료">출고준비</button>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn-secondary" id="btnReturnCancel">취소</button>
                         </div>
                     </div>
                 </div>
 
                 <div class="scan-history">
-                    <h3>최근 스캔 기록</h3>
+                    <h3>최근 기록</h3>
                     <div id="scanHistoryList" class="history-list">
-                        <div class="empty-state">스캔 기록이 없습니다.</div>
+                        <div class="empty-state">기록이 없습니다.</div>
                     </div>
                 </div>
             </section>
@@ -170,6 +206,10 @@
                             <input type="text" id="productCategory" placeholder="예: 에어컨">
                         </div>
                         <div class="form-group">
+                            <label for="productHours">사용가능시간 (시간) *</label>
+                            <input type="number" id="productHours" placeholder="예: 1000" min="0" required>
+                        </div>
+                        <div class="form-group">
                             <label for="productNote">비고</label>
                             <input type="text" id="productNote" placeholder="추가 메모">
                         </div>
@@ -180,9 +220,9 @@
                 <!-- 일괄 등록 -->
                 <div class="form-section">
                     <h3>일괄 등록</h3>
-                    <p class="form-help">여러 제품을 한 번에 등록합니다. (한 줄에 하나씩, 형식: 제품ID,제품명,카테고리)</p>
+                    <p class="form-help">여러 제품을 한 번에 등록합니다. (한 줄에 하나씩, 형식: 제품ID,제품명,카테고리,사용가능시간)</p>
                     <div class="form-group">
-                        <textarea id="bulkInput" rows="5" placeholder="P001,에어컨 A형,에어컨&#10;P002,에어컨 B형,에어컨&#10;P003,제습기,제습기"></textarea>
+                        <textarea id="bulkInput" rows="5" placeholder="P001,에어컨 A형,에어컨,1000&#10;P002,에어컨 B형,에어컨,1000&#10;P003,제습기,제습기,500"></textarea>
                     </div>
                     <button type="button" class="btn-secondary" id="bulkRegisterBtn">일괄 등록</button>
                 </div>
@@ -205,20 +245,12 @@
 
                 <!-- 개별 QR 생성 -->
                 <div class="form-section">
-                    <h3>개별 QR코드 생성</h3>
+                    <h3>제품별 QR코드 생성</h3>
+                    <p class="form-help">제품 고유의 QR코드를 생성합니다. (제품ID만 포함)</p>
                     <div class="form-group">
                         <label for="qrProductSelect">제품 선택</label>
                         <select id="qrProductSelect">
                             <option value="">제품을 선택하세요</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="qrStatusSelect">상태 선택</label>
-                        <select id="qrStatusSelect">
-                            <option value="미점검">미점검</option>
-                            <option value="고장">고장</option>
-                            <option value="청소">청소</option>
-                            <option value="출고준비완료">출고준비완료</option>
                         </select>
                     </div>
                     <button type="button" class="btn-primary" id="generateQrBtn">QR코드 생성</button>
@@ -233,7 +265,7 @@
                 <!-- QR시트 생성 -->
                 <div class="form-section">
                     <h3>QR코드 시트 생성</h3>
-                    <p class="form-help">선택한 제품들의 모든 상태 QR코드를 일괄 생성합니다.</p>
+                    <p class="form-help">선택한 제품들의 QR코드를 일괄 생성합니다.</p>
                     <div class="form-group">
                         <label>제품 선택</label>
                         <div class="checkbox-list" id="qrSheetProductList">

@@ -5,15 +5,17 @@
 
 // ===== 상수 정의 =====
 const STORAGE_KEY = 'dk_as_products';
-const HISTORY_KEY = 'dk_as_scan_history';
+const HISTORY_KEY = 'dk_as_history';
 const STATUS_TYPES = ['미점검', '고장', '청소', '출고준비완료'];
 
 // ===== 상태 관리 =====
 let products = [];
-let scanHistory = [];
+let history = [];
 let currentFilter = 'all';
+let searchKeyword = '';
 let html5QrCode = null;
 let isScanning = false;
+let currentScannedProduct = null;
 
 // ===== 초기화 =====
 document.addEventListener('DOMContentLoaded', () => {
@@ -22,9 +24,11 @@ document.addEventListener('DOMContentLoaded', () => {
     initProductForm();
     initBulkRegister();
     initFilters();
+    initSearch();
     initQRGenerator();
     initModal();
     initDeleteAll();
+    initScanActions();
     updateDashboard();
     updateProductList();
     updateQRProductSelect();
@@ -40,13 +44,13 @@ function loadData() {
         products = JSON.parse(savedProducts);
     }
     if (savedHistory) {
-        scanHistory = JSON.parse(savedHistory);
+        history = JSON.parse(savedHistory);
     }
 }
 
 function saveData() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(scanHistory));
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
 }
 
 // ===== 탭 관리 =====
@@ -57,24 +61,20 @@ function initTabs() {
         btn.addEventListener('click', () => {
             const tabId = btn.dataset.tab;
 
-            // 탭 버튼 활성화
             tabBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
 
-            // 탭 컨텐츠 활성화
             document.querySelectorAll('.tab-content').forEach(content => {
                 content.classList.remove('active');
             });
             document.getElementById(tabId).classList.add('active');
 
-            // QR 스캔 탭 처리
             if (tabId === 'scan') {
                 initQRScanner();
             } else {
                 stopQRScanner();
             }
 
-            // 대시보드 탭이면 업데이트
             if (tabId === 'dashboard') {
                 updateDashboard();
             }
@@ -98,14 +98,12 @@ function initQRScanner() {
         { facingMode: "environment" },
         config,
         onQRCodeScanned,
-        (errorMessage) => {
-            // QR 코드가 없을 때는 무시
-        }
+        (errorMessage) => {}
     ).then(() => {
         isScanning = true;
     }).catch((err) => {
         console.error("카메라 시작 실패:", err);
-        showToast('카메라를 시작할 수 없습니다. 카메라 권한을 확인해주세요.', 'error');
+        showToast('카메라를 시작할 수 없습니다.', 'error');
     });
 }
 
@@ -119,110 +117,230 @@ function stopQRScanner() {
 }
 
 function onQRCodeScanned(decodedText) {
-    // QR 형식: 제품ID_상태 (예: P001_청소)
-    const parts = decodedText.split('_');
+    // QR 형식: 제품ID만 (예: P001)
+    const productId = decodedText.trim();
 
-    if (parts.length < 2) {
-        showScanResult(null, null, '잘못된 QR코드 형식입니다.');
+    const product = products.find(p => p.id === productId);
+
+    if (!product) {
+        showToast('등록되지 않은 제품입니다: ' + productId, 'error');
         return;
     }
 
-    const productId = parts[0];
-    const status = parts.slice(1).join('_'); // 상태에 _ 가 있을 수 있음
+    currentScannedProduct = product;
+    showScanActionPanel(product);
 
-    // 유효한 상태인지 확인
-    if (!STATUS_TYPES.includes(status)) {
-        showScanResult(productId, status, '유효하지 않은 상태입니다.');
-        return;
-    }
-
-    // 제품 찾기
-    const productIndex = products.findIndex(p => p.id === productId);
-
-    if (productIndex === -1) {
-        showScanResult(productId, status, '등록되지 않은 제품입니다.');
-        return;
-    }
-
-    // 상태 업데이트
-    const oldStatus = products[productIndex].status;
-    products[productIndex].status = status;
-    products[productIndex].lastUpdated = new Date().toISOString();
-    saveData();
-
-    // 스캔 기록 추가
-    addScanHistory(productId, products[productIndex].name, status);
-
-    // 결과 표시
-    showScanResult(productId, status, `상태가 "${oldStatus}" → "${status}"로 변경되었습니다.`);
-
-    // 대시보드 업데이트
-    updateDashboard();
-
-    // 성공 토스트
-    showToast(`${products[productIndex].name}: ${status}`, 'success');
-
-    // 잠시 후 스캐너 재시작 (중복 스캔 방지)
+    // 스캐너 일시 중지
     stopQRScanner();
+}
+
+function showScanActionPanel(product) {
+    const panel = document.getElementById('scanActionPanel');
+    const nameEl = document.getElementById('scannedProductName');
+    const detailsEl = document.getElementById('scannedProductDetails');
+    const rentalInfoEl = document.getElementById('scannedRentalInfo');
+
+    nameEl.textContent = product.name;
+    detailsEl.textContent = `${product.id} | ${product.category} | 잔여: ${product.remainingHours || product.totalHours}시간`;
+
+    if (product.isRented && product.rentalCompany) {
+        rentalInfoEl.textContent = `현재 임대중: ${product.rentalCompany}`;
+        rentalInfoEl.style.display = 'block';
+    } else {
+        rentalInfoEl.style.display = 'none';
+    }
+
+    // 폼 초기화
+    document.getElementById('actionButtons').style.display = 'flex';
+    document.getElementById('rentalForm').style.display = 'none';
+    document.getElementById('returnForm').style.display = 'none';
+
+    panel.style.display = 'block';
+}
+
+function hideScanActionPanel() {
+    document.getElementById('scanActionPanel').style.display = 'none';
+    currentScannedProduct = null;
+
+    // 스캐너 재시작
     setTimeout(() => {
         initQRScanner();
-    }, 2000);
+    }, 500);
 }
 
-function showScanResult(productId, status, message) {
-    const resultDiv = document.getElementById('scanResult');
-    resultDiv.style.display = 'block';
+// ===== 스캔 액션 (임대/회수) =====
+function initScanActions() {
+    // 임대 버튼
+    document.getElementById('btnRental').addEventListener('click', () => {
+        if (!currentScannedProduct) return;
 
-    document.getElementById('scannedProductId').textContent = productId || '-';
-    document.getElementById('scannedStatus').textContent = status || '-';
-    document.getElementById('scanMessage').textContent = message;
+        if (currentScannedProduct.isRented) {
+            showToast('이미 임대중인 제품입니다.', 'error');
+            return;
+        }
 
-    // 상태에 따른 스타일 변경
-    if (message.includes('변경되었습니다')) {
-        resultDiv.style.borderColor = '#10b981';
-        document.querySelector('.result-header').style.color = '#10b981';
-    } else {
-        resultDiv.style.borderColor = '#ef4444';
-        document.querySelector('.result-header').style.color = '#ef4444';
-    }
+        document.getElementById('actionButtons').style.display = 'none';
+        document.getElementById('rentalForm').style.display = 'block';
+        document.getElementById('rentalCompany').value = '';
+        document.getElementById('rentalCompany').focus();
+    });
+
+    // 임대회수 버튼
+    document.getElementById('btnReturn').addEventListener('click', () => {
+        if (!currentScannedProduct) return;
+
+        if (!currentScannedProduct.isRented) {
+            showToast('임대중이 아닌 제품입니다.', 'error');
+            return;
+        }
+
+        document.getElementById('actionButtons').style.display = 'none';
+        document.getElementById('returnForm').style.display = 'block';
+        document.getElementById('usedHours').value = '';
+        document.getElementById('returnNote').value = '';
+
+        const remaining = currentScannedProduct.remainingHours || currentScannedProduct.totalHours;
+        document.getElementById('usedTimeInfo').textContent =
+            `${currentScannedProduct.rentalCompany} 임대 | 현재 잔여시간: ${remaining}시간`;
+    });
+
+    // 임대 취소
+    document.getElementById('btnRentalCancel').addEventListener('click', () => {
+        hideScanActionPanel();
+    });
+
+    // 임대 저장
+    document.getElementById('btnRentalSave').addEventListener('click', () => {
+        const company = document.getElementById('rentalCompany').value.trim();
+
+        if (!company) {
+            showToast('업체명을 입력해주세요.', 'error');
+            return;
+        }
+
+        // 제품 임대 처리
+        const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
+        if (productIndex !== -1) {
+            products[productIndex].isRented = true;
+            products[productIndex].rentalCompany = company;
+            products[productIndex].rentalDate = new Date().toISOString();
+            saveData();
+
+            // 기록 추가
+            addHistory({
+                type: '임대',
+                productId: currentScannedProduct.id,
+                productName: currentScannedProduct.name,
+                company: company,
+                time: new Date().toISOString()
+            });
+
+            showToast(`${currentScannedProduct.name} - ${company} 임대 완료`, 'success');
+            updateDashboard();
+        }
+
+        hideScanActionPanel();
+    });
+
+    // 임대회수 취소
+    document.getElementById('btnReturnCancel').addEventListener('click', () => {
+        hideScanActionPanel();
+    });
+
+    // 사용시간 입력 시 차감 계산 표시
+    document.getElementById('usedHours').addEventListener('input', (e) => {
+        const usedHours = parseInt(e.target.value) || 0;
+        const remaining = currentScannedProduct.remainingHours || currentScannedProduct.totalHours;
+        const newRemaining = Math.max(0, remaining - usedHours);
+
+        document.getElementById('usedTimeInfo').textContent =
+            `${currentScannedProduct.rentalCompany} 사용: ${usedHours}시간 | 잔여: ${remaining}시간 → ${newRemaining}시간`;
+    });
+
+    // 상태 버튼 클릭 (임대회수 완료)
+    document.querySelectorAll('.status-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const status = btn.dataset.status;
+            const usedHours = parseInt(document.getElementById('usedHours').value) || 0;
+            const note = document.getElementById('returnNote').value.trim();
+
+            // 제품 업데이트
+            const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
+            if (productIndex !== -1) {
+                const remaining = products[productIndex].remainingHours || products[productIndex].totalHours;
+                const newRemaining = Math.max(0, remaining - usedHours);
+
+                const returnRecord = {
+                    type: '임대회수',
+                    productId: currentScannedProduct.id,
+                    productName: currentScannedProduct.name,
+                    company: products[productIndex].rentalCompany,
+                    usedHours: usedHours,
+                    previousRemaining: remaining,
+                    newRemaining: newRemaining,
+                    note: note,
+                    status: status,
+                    time: new Date().toISOString()
+                };
+
+                products[productIndex].remainingHours = newRemaining;
+                products[productIndex].isRented = false;
+                products[productIndex].status = status;
+                products[productIndex].lastUpdated = new Date().toISOString();
+                products[productIndex].lastNote = note;
+                products[productIndex].lastCompany = products[productIndex].rentalCompany;
+                products[productIndex].rentalCompany = null;
+                products[productIndex].rentalDate = null;
+
+                saveData();
+                addHistory(returnRecord);
+
+                showToast(`${currentScannedProduct.name} 회수 완료 - ${status}`, 'success');
+                updateDashboard();
+            }
+
+            hideScanActionPanel();
+        });
+    });
 }
 
-function addScanHistory(productId, productName, status) {
-    const historyItem = {
-        productId,
-        productName,
-        status,
-        time: new Date().toISOString()
-    };
-
-    scanHistory.unshift(historyItem);
-
-    // 최대 50개까지만 저장
-    if (scanHistory.length > 50) {
-        scanHistory = scanHistory.slice(0, 50);
+// ===== 기록 관리 =====
+function addHistory(record) {
+    history.unshift(record);
+    if (history.length > 100) {
+        history = history.slice(0, 100);
     }
-
     saveData();
-    updateScanHistory();
+    updateHistoryList();
 }
 
-function updateScanHistory() {
+function updateHistoryList() {
     const listDiv = document.getElementById('scanHistoryList');
 
-    if (scanHistory.length === 0) {
-        listDiv.innerHTML = '<div class="empty-state">스캔 기록이 없습니다.</div>';
+    if (history.length === 0) {
+        listDiv.innerHTML = '<div class="empty-state">기록이 없습니다.</div>';
         return;
     }
 
-    listDiv.innerHTML = scanHistory.slice(0, 10).map(item => {
+    listDiv.innerHTML = history.slice(0, 20).map(item => {
         const time = new Date(item.time);
-        const timeStr = time.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+        const timeStr = time.toLocaleString('ko-KR', {
+            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+
+        let detail = '';
+        if (item.type === '임대') {
+            detail = `→ ${item.company}`;
+        } else if (item.type === '임대회수') {
+            detail = `← ${item.company} | ${item.usedHours}h | ${item.status}`;
+        }
 
         return `
-            <div class="history-item">
+            <div class="history-item ${item.type === '임대' ? 'rental' : 'return'}">
                 <span class="history-time">${timeStr}</span>
-                <span class="history-product">${item.productName} (${item.productId})</span>
-                <span class="product-status ${item.status}">${item.status}</span>
+                <span class="history-type">${item.type}</span>
+                <span class="history-product">${item.productName}</span>
+                <span class="history-detail">${detail}</span>
             </div>
         `;
     }).join('');
@@ -238,32 +356,33 @@ function initProductForm() {
         const id = document.getElementById('productId').value.trim();
         const name = document.getElementById('productName').value.trim();
         const category = document.getElementById('productCategory').value.trim();
+        const hours = parseInt(document.getElementById('productHours').value) || 0;
         const note = document.getElementById('productNote').value.trim();
 
-        // 중복 ID 확인
         if (products.some(p => p.id === id)) {
             showToast('이미 등록된 제품 ID입니다.', 'error');
             return;
         }
 
-        // 제품 추가
         const product = {
             id,
             name,
             category: category || '기타',
+            totalHours: hours,
+            remainingHours: hours,
             note,
             status: '미점검',
+            isRented: false,
+            rentalCompany: null,
+            rentalDate: null,
             createdAt: new Date().toISOString(),
             lastUpdated: new Date().toISOString()
         };
 
         products.push(product);
         saveData();
-
-        // 폼 초기화
         form.reset();
 
-        // UI 업데이트
         updateDashboard();
         updateProductList();
         updateQRProductSelect();
@@ -291,7 +410,7 @@ function initBulkRegister() {
         lines.forEach(line => {
             const parts = line.split(',').map(p => p.trim());
 
-            if (parts.length < 2) {
+            if (parts.length < 4) {
                 skippedCount++;
                 return;
             }
@@ -299,8 +418,8 @@ function initBulkRegister() {
             const id = parts[0];
             const name = parts[1];
             const category = parts[2] || '기타';
+            const hours = parseInt(parts[3]) || 0;
 
-            // 중복 ID 확인
             if (products.some(p => p.id === id)) {
                 skippedCount++;
                 return;
@@ -310,8 +429,13 @@ function initBulkRegister() {
                 id,
                 name,
                 category,
+                totalHours: hours,
+                remainingHours: hours,
                 note: '',
                 status: '미점검',
+                isRented: false,
+                rentalCompany: null,
+                rentalDate: null,
                 createdAt: new Date().toISOString(),
                 lastUpdated: new Date().toISOString()
             });
@@ -320,11 +444,8 @@ function initBulkRegister() {
         });
 
         saveData();
-
-        // 입력 초기화
         document.getElementById('bulkInput').value = '';
 
-        // UI 업데이트
         updateDashboard();
         updateProductList();
         updateQRProductSelect();
@@ -377,9 +498,10 @@ function updateProductList() {
             <span class="product-status-badge ${product.status}"></span>
             <div class="product-info">
                 <div class="product-name">${product.name}</div>
-                <div class="product-id">${product.id}</div>
+                <div class="product-id">${product.id} | ${product.remainingHours || product.totalHours}h</div>
             </div>
             <span class="product-category">${product.category}</span>
+            ${product.isRented ? `<span class="rental-badge">임대중</span>` : ''}
             <span class="product-status ${product.status}">${product.status}</span>
             <div class="product-actions">
                 <button class="btn-icon danger" onclick="deleteProduct('${product.id}')" title="삭제">🗑️</button>
@@ -390,7 +512,6 @@ function updateProductList() {
 
 function deleteProduct(productId) {
     const product = products.find(p => p.id === productId);
-
     if (!product) return;
 
     showModal(
@@ -425,21 +546,38 @@ function initFilters() {
     });
 }
 
+function initSearch() {
+    const searchInput = document.getElementById('dashboardSearch');
+
+    searchInput.addEventListener('input', (e) => {
+        searchKeyword = e.target.value.trim().toLowerCase();
+        updateDashboard();
+    });
+}
+
 function updateDashboard() {
-    // 통계 업데이트
+    // 통계 계산
     const total = products.length;
     const unchecked = products.filter(p => p.status === '미점검').length;
     const broken = products.filter(p => p.status === '고장').length;
     const cleaning = products.filter(p => p.status === '청소').length;
     const ready = products.filter(p => p.status === '출고준비완료').length;
 
+    // 통계 카드 업데이트
     document.getElementById('statTotal').textContent = total;
     document.getElementById('statUnchecked').textContent = unchecked;
     document.getElementById('statBroken').textContent = broken;
     document.getElementById('statCleaning').textContent = cleaning;
     document.getElementById('statReady').textContent = ready;
 
-    // 진행률 업데이트 (미점검 제외한 비율)
+    // 필터 버튼 개수 업데이트
+    document.getElementById('filterCountAll').textContent = total;
+    document.getElementById('filterCountUnchecked').textContent = unchecked;
+    document.getElementById('filterCountBroken').textContent = broken;
+    document.getElementById('filterCountCleaning').textContent = cleaning;
+    document.getElementById('filterCountReady').textContent = ready;
+
+    // 진행률 (미점검 제외한 비율)
     const checked = total - unchecked;
     const progressPercent = total > 0 ? Math.round((checked / total) * 100) : 0;
 
@@ -449,40 +587,56 @@ function updateDashboard() {
     // 최종 업데이트 시간
     document.getElementById('lastUpdated').textContent = new Date().toLocaleTimeString('ko-KR');
 
-    // 필터링된 제품 목록 업데이트
+    // 목록 업데이트
     updateDashboardList();
-
-    // 스캔 기록 업데이트
-    updateScanHistory();
+    updateHistoryList();
 }
 
 function updateDashboardList() {
     const listDiv = document.getElementById('dashboardList');
 
+    // 필터링
     let filteredProducts = products;
 
     if (currentFilter !== 'all') {
-        filteredProducts = products.filter(p => p.status === currentFilter);
+        filteredProducts = filteredProducts.filter(p => p.status === currentFilter);
+    }
+
+    // 검색
+    if (searchKeyword) {
+        filteredProducts = filteredProducts.filter(p =>
+            p.name.toLowerCase().includes(searchKeyword) ||
+            p.id.toLowerCase().includes(searchKeyword) ||
+            (p.rentalCompany && p.rentalCompany.toLowerCase().includes(searchKeyword)) ||
+            (p.lastCompany && p.lastCompany.toLowerCase().includes(searchKeyword))
+        );
     }
 
     if (filteredProducts.length === 0) {
         listDiv.innerHTML = `<div class="empty-state">
-            ${currentFilter === 'all' ? '등록된 제품이 없습니다.<br>제품관리 탭에서 제품을 등록해주세요.' : '해당하는 제품이 없습니다.'}
+            ${searchKeyword ? '검색 결과가 없습니다.' : (currentFilter === 'all' ? '등록된 제품이 없습니다.' : '해당하는 제품이 없습니다.')}
         </div>`;
         return;
     }
 
-    listDiv.innerHTML = filteredProducts.map(product => `
-        <div class="product-item" data-id="${product.id}">
-            <span class="product-status-badge ${product.status}"></span>
-            <div class="product-info">
-                <div class="product-name">${product.name}</div>
-                <div class="product-id">${product.id}</div>
+    listDiv.innerHTML = filteredProducts.map(product => {
+        const rentalInfo = product.isRented ?
+            `<span class="rental-badge">임대중: ${product.rentalCompany}</span>` :
+            (product.lastCompany ? `<span class="last-rental">최근: ${product.lastCompany}</span>` : '');
+
+        return `
+            <div class="product-item dashboard-item" data-id="${product.id}">
+                <span class="product-status-badge ${product.status}"></span>
+                <div class="product-info">
+                    <div class="product-name">${product.name}</div>
+                    <div class="product-id">${product.id} | 잔여: ${product.remainingHours || product.totalHours}h</div>
+                    ${rentalInfo}
+                    ${product.lastNote ? `<div class="product-note">메모: ${product.lastNote}</div>` : ''}
+                </div>
+                <span class="product-status ${product.status}">${product.status}</span>
             </div>
-            <span class="product-category">${product.category}</span>
-            <span class="product-status ${product.status}">${product.status}</span>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 // ===== QR 코드 생성 =====
@@ -534,25 +688,21 @@ function selectAllProducts() {
 
 function generateSingleQR() {
     const productId = document.getElementById('qrProductSelect').value;
-    const status = document.getElementById('qrStatusSelect').value;
 
     if (!productId) {
         showToast('제품을 선택해주세요.', 'error');
         return;
     }
 
-    // QRCode 라이브러리 확인
     if (typeof QRCode === 'undefined') {
         showToast('QR 라이브러리 로딩 중... 잠시 후 다시 시도해주세요.', 'error');
         return;
     }
 
     const product = products.find(p => p.id === productId);
-    const qrText = `${productId}_${status}`;
+    const qrText = productId; // 제품ID만 QR에 포함
 
     const qrContainer = document.getElementById('qrCanvas');
-
-    // 기존 QR 코드 삭제
     qrContainer.innerHTML = '';
 
     try {
@@ -566,7 +716,7 @@ function generateSingleQR() {
         });
 
         document.getElementById('qrPreview').style.display = 'block';
-        document.getElementById('qrText').textContent = `${product.name} - ${status}`;
+        document.getElementById('qrText').textContent = `${product.name} (${product.id})`;
         showToast('QR코드가 생성되었습니다.', 'success');
     } catch (e) {
         console.error('QR 생성 예외:', e);
@@ -577,14 +727,12 @@ function generateSingleQR() {
 function downloadQR() {
     const qrContainer = document.getElementById('qrCanvas');
     const productId = document.getElementById('qrProductSelect').value;
-    const status = document.getElementById('qrStatusSelect').value;
 
-    // qrcodejs는 img와 canvas를 생성함
     const img = qrContainer.querySelector('img');
     const canvas = qrContainer.querySelector('canvas');
 
     const link = document.createElement('a');
-    link.download = `QR_${productId}_${status}.png`;
+    link.download = `QR_${productId}.png`;
 
     if (canvas) {
         link.href = canvas.toDataURL('image/png');
@@ -604,7 +752,6 @@ function generateQRSheet() {
         return;
     }
 
-    // QRCode 라이브러리 확인
     if (typeof QRCode === 'undefined') {
         showToast('QR 라이브러리 로딩 중... 잠시 후 다시 시도해주세요.', 'error');
         return;
@@ -615,43 +762,39 @@ function generateQRSheet() {
 
     sheetDiv.innerHTML = '';
 
-    // 각 제품의 모든 상태 QR 생성
     selectedIds.forEach(productId => {
         const product = products.find(p => p.id === productId);
 
-        STATUS_TYPES.forEach(status => {
-            const qrText = `${productId}_${status}`;
-            const itemDiv = document.createElement('div');
-            itemDiv.className = 'qr-sheet-item';
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'qr-sheet-item';
 
-            const qrDiv = document.createElement('div');
-            const label = document.createElement('div');
-            label.className = 'qr-label';
-            label.textContent = `${product.name}\n${status}`;
+        const qrDiv = document.createElement('div');
+        const label = document.createElement('div');
+        label.className = 'qr-label';
+        label.innerHTML = `${product.name}<br>${product.id}`;
 
-            itemDiv.appendChild(qrDiv);
-            itemDiv.appendChild(label);
-            sheetDiv.appendChild(itemDiv);
+        itemDiv.appendChild(qrDiv);
+        itemDiv.appendChild(label);
+        sheetDiv.appendChild(itemDiv);
 
-            try {
-                new QRCode(qrDiv, {
-                    text: qrText,
-                    width: 100,
-                    height: 100,
-                    colorDark: '#000000',
-                    colorLight: '#ffffff',
-                    correctLevel: QRCode.CorrectLevel.H
-                });
-            } catch (e) {
-                console.error('QR 시트 생성 오류:', e);
-            }
-        });
+        try {
+            new QRCode(qrDiv, {
+                text: productId,
+                width: 100,
+                height: 100,
+                colorDark: '#000000',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        } catch (e) {
+            console.error('QR 시트 생성 오류:', e);
+        }
     });
 
     previewDiv.style.display = 'block';
     previewDiv.scrollIntoView({ behavior: 'smooth' });
 
-    showToast(`${selectedIds.length}개 제품의 QR코드 시트가 생성되었습니다.`, 'success');
+    showToast(`${selectedIds.length}개 제품의 QR코드가 생성되었습니다.`, 'success');
 }
 
 // ===== 유틸리티 =====
