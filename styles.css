@@ -170,6 +170,10 @@ body {
     margin-bottom: 20px;
 }
 
+.stats-container.stats-7 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
 .stat-card {
     background-color: var(--white);
     border-radius: var(--radius);
@@ -177,6 +181,13 @@ body {
     text-align: center;
     box-shadow: var(--shadow);
     border-left: 4px solid var(--gray-300);
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .stat-card.total {
@@ -187,12 +198,20 @@ body {
     border-left-color: var(--gray-500);
 }
 
-.stat-card.broken {
-    border-left-color: var(--danger-color);
+.stat-card.repair-wait {
+    border-left-color: #f87171;
 }
 
-.stat-card.cleaning {
-    border-left-color: var(--warning-color);
+.stat-card.repair-done {
+    border-left-color: #fb923c;
+}
+
+.stat-card.clean-wait {
+    border-left-color: #fbbf24;
+}
+
+.stat-card.clean-done {
+    border-left-color: #a3e635;
 }
 
 .stat-card.ready {
@@ -209,6 +228,12 @@ body {
     font-size: 11px;
     color: var(--gray-500);
     margin-top: 4px;
+}
+
+.stat-progress {
+    font-size: 10px;
+    color: var(--gray-400);
+    margin-top: 2px;
 }
 
 /* 진행률 바 */
@@ -273,6 +298,17 @@ body {
     color: var(--white);
 }
 
+.filter-btn.reset {
+    background-color: var(--gray-700);
+    border-color: var(--gray-700);
+    color: var(--white);
+}
+
+.filter-btn.reset:hover {
+    background-color: var(--gray-900);
+    border-color: var(--gray-900);
+}
+
 /* ===== 제품 목록 ===== */
 .product-list {
     display: flex;
@@ -317,16 +353,33 @@ body {
     background-color: var(--gray-500);
 }
 
+.product-status-badge.수리대기 {
+    background-color: #f87171;
+}
+
+.product-status-badge.수리완료 {
+    background-color: #fb923c;
+}
+
+.product-status-badge.청소대기 {
+    background-color: #fbbf24;
+}
+
+.product-status-badge.청소완료 {
+    background-color: #a3e635;
+}
+
+.product-status-badge.출고준비완료 {
+    background-color: var(--success-color);
+}
+
+/* 기존 호환성 */
 .product-status-badge.고장 {
     background-color: var(--danger-color);
 }
 
 .product-status-badge.청소 {
     background-color: var(--warning-color);
-}
-
-.product-status-badge.출고준비완료 {
-    background-color: var(--success-color);
 }
 
 .product-info {
@@ -377,6 +430,32 @@ body {
     color: #6b7280;
 }
 
+.product-status.수리대기 {
+    background-color: #fef2f2;
+    color: #dc2626;
+}
+
+.product-status.수리완료 {
+    background-color: #fff7ed;
+    color: #ea580c;
+}
+
+.product-status.청소대기 {
+    background-color: #fffbeb;
+    color: #d97706;
+}
+
+.product-status.청소완료 {
+    background-color: #f7fee7;
+    color: #65a30d;
+}
+
+.product-status.출고준비완료 {
+    background-color: #ecfdf5;
+    color: #059669;
+}
+
+/* 기존 호환성 */
 .product-status.고장 {
     background-color: #fef2f2;
     color: #dc2626;
@@ -385,11 +464,6 @@ body {
 .product-status.청소 {
     background-color: #fffbeb;
     color: #d97706;
-}
-
-.product-status.출고준비완료 {
-    background-color: #ecfdf5;
-    color: #059669;
 }
 
 .rental-badge {
@@ -587,6 +661,57 @@ body {
     background-color: var(--gray-100);
 }
 
+.status-btn.repair-wait {
+    border-color: #f87171;
+    color: #dc2626;
+}
+
+.status-btn.repair-wait:hover {
+    background-color: #fef2f2;
+}
+
+.status-btn.repair-done {
+    border-color: #fb923c;
+    color: #ea580c;
+}
+
+.status-btn.repair-done:hover {
+    background-color: #fff7ed;
+}
+
+.status-btn.clean-wait {
+    border-color: #fbbf24;
+    color: #d97706;
+}
+
+.status-btn.clean-wait:hover {
+    background-color: #fffbeb;
+}
+
+.status-btn.clean-done {
+    border-color: #a3e635;
+    color: #65a30d;
+}
+
+.status-btn.clean-done:hover {
+    background-color: #f7fee7;
+}
+
+.status-btn.ready {
+    border-color: var(--success-color);
+    color: var(--success-color);
+}
+
+.status-btn.ready:hover {
+    background-color: #ecfdf5;
+}
+
+/* 6개 상태 버튼 그리드 */
+.status-buttons.status-6 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+/* 기존 호환성 */
 .status-btn.broken {
     border-color: var(--danger-color);
     color: var(--danger-color);
@@ -603,15 +728,6 @@ body {
 
 .status-btn.cleaning:hover {
     background-color: #fffbeb;
-}
-
-.status-btn.ready {
-    border-color: var(--success-color);
-    color: var(--success-color);
-}
-
-.status-btn.ready:hover {
-    background-color: #ecfdf5;
 }
 
 /* ===== 스캔 기록 ===== */
@@ -1076,10 +1192,117 @@ body {
     background-color: var(--primary-dark);
 }
 
+.qr-btn-group {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-history {
+    padding: 8px 16px;
+    background-color: var(--info-color);
+    color: var(--white);
+    border: none;
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.btn-history:hover {
+    background-color: #1d4ed8;
+}
+
+/* 사진 촬영 */
+.photo-capture-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.btn-photo {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background-color: var(--gray-100);
+    border: 2px dashed var(--gray-300);
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--gray-700);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-photo:hover {
+    background-color: var(--gray-200);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.photo-preview {
+    max-width: 100%;
+    max-height: 200px;
+    border-radius: var(--radius);
+    border: 1px solid var(--gray-200);
+}
+
+/* 임대 기록 모달 */
+.modal.modal-lg {
+    max-width: 500px;
+}
+
+.rental-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.rental-history-item {
+    padding: 12px;
+    background-color: var(--gray-100);
+    border-radius: var(--radius);
+    border-left: 4px solid var(--info-color);
+}
+
+.rental-history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.rental-company {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--gray-900);
+}
+
+.rental-date {
+    font-size: 12px;
+    color: var(--gray-500);
+}
+
+.rental-history-details {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--gray-600);
+}
+
 /* ===== 반응형 ===== */
 @media (max-width: 480px) {
     .stats-container {
         grid-template-columns: repeat(3, 1fr);
+    }
+
+    .stats-container.stats-7 {
+        grid-template-columns: repeat(4, 1fr);
     }
 
     .stats-container .stat-card:nth-child(4),
@@ -1088,16 +1311,24 @@ body {
     }
 
     .stat-number {
-        font-size: 20px;
+        font-size: 18px;
     }
 
     .stat-label {
-        font-size: 10px;
+        font-size: 9px;
+    }
+
+    .stat-progress {
+        font-size: 8px;
     }
 
     .filter-btn {
-        padding: 6px 10px;
-        font-size: 11px;
+        padding: 6px 8px;
+        font-size: 10px;
+    }
+
+    .filter-section {
+        gap: 4px;
     }
 
     .product-item {
@@ -1110,6 +1341,19 @@ body {
 
     .status-buttons {
         grid-template-columns: 1fr 1fr;
+    }
+
+    .status-buttons.status-6 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .qr-btn-group {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .qr-btn-group button {
+        width: 100%;
     }
 }
 

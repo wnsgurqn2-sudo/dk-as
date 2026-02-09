@@ -6,16 +6,29 @@
 // ===== 상수 정의 =====
 const STORAGE_KEY = 'dk_as_products';
 const HISTORY_KEY = 'dk_as_history';
-const STATUS_TYPES = ['미점검', '고장', '청소', '출고준비완료'];
+const PHOTOS_KEY = 'dk_as_photos';
+const STATUS_TYPES = ['미점검', '수리대기', '수리완료', '청소대기', '청소완료', '출고준비완료'];
+
+// 상태별 진행률
+const STATUS_PROGRESS = {
+    '미점검': 0,
+    '수리대기': 0,
+    '수리완료': 50,
+    '청소대기': 70,
+    '청소완료': 90,
+    '출고준비완료': 100
+};
 
 // ===== 상태 관리 =====
 let products = [];
 let history = [];
+let photos = {};
 let currentFilter = 'all';
 let searchKeyword = '';
 let html5QrCode = null;
 let isScanning = false;
 let currentScannedProduct = null;
+let currentPhotoType = null; // 'rental' or 'return'
 
 // ===== 초기화 =====
 document.addEventListener('DOMContentLoaded', () => {
@@ -28,6 +41,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initQRGenerator();
     initModal();
     initEditProductModal();
+    initRentalHistoryModal();
+    initPhotoCapture();
     initDeleteAll();
     initScanActions();
     updateDashboard();
@@ -36,10 +51,53 @@ document.addEventListener('DOMContentLoaded', () => {
     updateQRSheetProductList();
 });
 
+// ===== 임대기록 모달 =====
+function initRentalHistoryModal() {
+    const modal = document.getElementById('rentalHistoryModal');
+    const closeBtn = document.getElementById('rentalHistoryClose');
+    const backBtn = document.getElementById('rentalHistoryBack');
+
+    closeBtn.addEventListener('click', closeRentalHistoryModal);
+    backBtn.addEventListener('click', closeRentalHistoryModal);
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeRentalHistoryModal();
+        }
+    });
+}
+
+// ===== 사진 촬영 =====
+function initPhotoCapture() {
+    // 임대 사진 촬영
+    document.getElementById('rentalPhotoInput').addEventListener('change', (e) => {
+        handlePhotoCapture(e, 'rentalPhotoPreview');
+    });
+
+    // 회수 사진 촬영
+    document.getElementById('returnPhotoInput').addEventListener('change', (e) => {
+        handlePhotoCapture(e, 'returnPhotoPreview');
+    });
+}
+
+function handlePhotoCapture(event, previewId) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const preview = document.getElementById(previewId);
+        preview.src = e.target.result;
+        preview.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+}
+
 // ===== 데이터 관리 =====
 function loadData() {
     const savedProducts = localStorage.getItem(STORAGE_KEY);
     const savedHistory = localStorage.getItem(HISTORY_KEY);
+    const savedPhotos = localStorage.getItem(PHOTOS_KEY);
 
     if (savedProducts) {
         products = JSON.parse(savedProducts);
@@ -47,11 +105,18 @@ function loadData() {
     if (savedHistory) {
         history = JSON.parse(savedHistory);
     }
+    if (savedPhotos) {
+        photos = JSON.parse(savedPhotos);
+    }
 }
 
 function saveData() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+}
+
+function savePhotos() {
+    localStorage.setItem(PHOTOS_KEY, JSON.stringify(photos));
 }
 
 // ===== 탭 관리 =====
@@ -165,6 +230,15 @@ function hideScanActionPanel() {
     document.getElementById('rentalForm').style.display = 'none';
     document.getElementById('returnForm').style.display = 'none';
     document.getElementById('statusForm').style.display = 'none';
+
+    // 사진 미리보기 초기화
+    document.getElementById('rentalPhotoPreview').src = '';
+    document.getElementById('rentalPhotoPreview').style.display = 'none';
+    document.getElementById('rentalPhotoInput').value = '';
+    document.getElementById('returnPhotoPreview').src = '';
+    document.getElementById('returnPhotoPreview').style.display = 'none';
+    document.getElementById('returnPhotoInput').value = '';
+
     currentScannedProduct = null;
 
     // 스캐너 재시작
@@ -226,6 +300,7 @@ function initScanActions() {
     // 임대 저장
     document.getElementById('btnRentalSave').addEventListener('click', () => {
         const company = document.getElementById('rentalCompany').value.trim();
+        const photoData = document.getElementById('rentalPhotoPreview').src;
 
         if (!company) {
             showToast('업체명을 입력해주세요.', 'error');
@@ -235,9 +310,24 @@ function initScanActions() {
         // 제품 임대 처리
         const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
         if (productIndex !== -1) {
+            const rentalRecord = {
+                type: '임대',
+                company: company,
+                rentalDate: new Date().toISOString(),
+                remainingHoursAtRental: products[productIndex].remainingHours || products[productIndex].totalHours,
+                photo: photoData && photoData !== '' ? photoData : null
+            };
+
+            // 임대기록 배열 초기화 및 추가
+            if (!products[productIndex].rentalHistory) {
+                products[productIndex].rentalHistory = [];
+            }
+            products[productIndex].rentalHistory.push(rentalRecord);
+
             products[productIndex].isRented = true;
             products[productIndex].rentalCompany = company;
             products[productIndex].rentalDate = new Date().toISOString();
+            products[productIndex].currentRentalIndex = products[productIndex].rentalHistory.length - 1;
             saveData();
 
             // 기록 추가
@@ -270,7 +360,7 @@ function initScanActions() {
     document.getElementById('returnHours').addEventListener('input', (e) => {
         const newRemaining = parseInt(e.target.value) || 0;
         const previousRemaining = currentScannedProduct.remainingHours || currentScannedProduct.totalHours;
-        const usedHours = Math.max(0, previousRemaining - newRemaining);
+        const usedHours = Math.abs(previousRemaining - newRemaining);
 
         document.getElementById('usedTimeInfo').innerHTML =
             `<strong>회수 전:</strong> ${previousRemaining}시간 → <strong>회수 후:</strong> ${newRemaining}시간<br>` +
@@ -283,12 +373,25 @@ function initScanActions() {
             const status = btn.dataset.status;
             const newRemaining = parseInt(document.getElementById('returnHours').value) || 0;
             const note = document.getElementById('returnNote').value.trim();
+            const photoData = document.getElementById('returnPhotoPreview').src;
 
             // 제품 업데이트
             const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
             if (productIndex !== -1) {
                 const previousRemaining = products[productIndex].remainingHours || products[productIndex].totalHours;
-                const usedHours = Math.max(0, previousRemaining - newRemaining);
+                const usedHours = Math.abs(previousRemaining - newRemaining);
+
+                // 현재 임대 기록 업데이트
+                if (products[productIndex].rentalHistory && products[productIndex].currentRentalIndex !== undefined) {
+                    const currentRental = products[productIndex].rentalHistory[products[productIndex].currentRentalIndex];
+                    if (currentRental) {
+                        currentRental.returnDate = new Date().toISOString();
+                        currentRental.usedHours = usedHours;
+                        currentRental.remainingHoursAtReturn = newRemaining;
+                        currentRental.note = note;
+                        currentRental.returnPhoto = photoData && photoData !== '' ? photoData : null;
+                    }
+                }
 
                 const returnRecord = {
                     type: '임대회수',
@@ -312,6 +415,7 @@ function initScanActions() {
                 products[productIndex].lastUsedHours = usedHours;
                 products[productIndex].rentalCompany = null;
                 products[productIndex].rentalDate = null;
+                products[productIndex].currentRentalIndex = null;
 
                 saveData();
                 addHistory(returnRecord);
@@ -605,6 +709,32 @@ function initFilters() {
             updateDashboard();
         });
     });
+
+    // 통계 카드 클릭으로 필터링
+    document.querySelectorAll('.stat-card[data-filter]').forEach(card => {
+        card.addEventListener('click', () => {
+            const filter = card.dataset.filter;
+            filterBtns.forEach(b => b.classList.remove('active'));
+
+            const matchingBtn = document.querySelector(`.filter-btn[data-filter="${filter}"]`);
+            if (matchingBtn) {
+                matchingBtn.classList.add('active');
+            }
+
+            currentFilter = filter;
+            updateDashboard();
+        });
+    });
+
+    // 초기화 버튼
+    document.getElementById('filterResetBtn').addEventListener('click', () => {
+        filterBtns.forEach(b => b.classList.remove('active'));
+        document.querySelector('.filter-btn[data-filter="all"]').classList.add('active');
+        currentFilter = 'all';
+        document.getElementById('dashboardSearch').value = '';
+        searchKeyword = '';
+        updateDashboard();
+    });
 }
 
 function initSearch() {
@@ -617,30 +747,39 @@ function initSearch() {
 }
 
 function updateDashboard() {
-    // 통계 계산
+    // 통계 계산 (6개 상태)
     const total = products.length;
     const unchecked = products.filter(p => p.status === '미점검').length;
-    const broken = products.filter(p => p.status === '고장').length;
-    const cleaning = products.filter(p => p.status === '청소').length;
+    const repairWait = products.filter(p => p.status === '수리대기').length;
+    const repairDone = products.filter(p => p.status === '수리완료').length;
+    const cleanWait = products.filter(p => p.status === '청소대기').length;
+    const cleanDone = products.filter(p => p.status === '청소완료').length;
     const ready = products.filter(p => p.status === '출고준비완료').length;
 
     // 통계 카드 업데이트
     document.getElementById('statTotal').textContent = total;
     document.getElementById('statUnchecked').textContent = unchecked;
-    document.getElementById('statBroken').textContent = broken;
-    document.getElementById('statCleaning').textContent = cleaning;
+    document.getElementById('statRepairWait').textContent = repairWait;
+    document.getElementById('statRepairDone').textContent = repairDone;
+    document.getElementById('statCleanWait').textContent = cleanWait;
+    document.getElementById('statCleanDone').textContent = cleanDone;
     document.getElementById('statReady').textContent = ready;
 
     // 필터 버튼 개수 업데이트
     document.getElementById('filterCountAll').textContent = total;
     document.getElementById('filterCountUnchecked').textContent = unchecked;
-    document.getElementById('filterCountBroken').textContent = broken;
-    document.getElementById('filterCountCleaning').textContent = cleaning;
+    document.getElementById('filterCountRepairWait').textContent = repairWait;
+    document.getElementById('filterCountRepairDone').textContent = repairDone;
+    document.getElementById('filterCountCleanWait').textContent = cleanWait;
+    document.getElementById('filterCountCleanDone').textContent = cleanDone;
     document.getElementById('filterCountReady').textContent = ready;
 
-    // 진행률 (미점검 제외한 비율)
-    const checked = total - unchecked;
-    const progressPercent = total > 0 ? Math.round((checked / total) * 100) : 0;
+    // 진행률 (각 항목별 가중치 적용)
+    let totalProgress = 0;
+    products.forEach(p => {
+        totalProgress += STATUS_PROGRESS[p.status] || 0;
+    });
+    const progressPercent = total > 0 ? Math.round(totalProgress / total) : 0;
 
     document.getElementById('progressPercent').textContent = progressPercent + '%';
     document.getElementById('progressFill').style.width = progressPercent + '%';
@@ -922,6 +1061,7 @@ function initEditProductModal() {
     const cancelBtn = document.getElementById('editModalCancel');
     const saveBtn = document.getElementById('editModalSave');
     const downloadBtn = document.getElementById('editQrDownload');
+    const historyBtn = document.getElementById('editHistoryBtn');
 
     closeBtn.addEventListener('click', closeEditProductModal);
     cancelBtn.addEventListener('click', closeEditProductModal);
@@ -951,6 +1091,12 @@ function initEditProductModal() {
 
         link.click();
         showToast('QR코드가 다운로드되었습니다.', 'success');
+    });
+
+    // 기록 버튼 - 임대 기록 표시
+    historyBtn.addEventListener('click', () => {
+        if (!currentEditProduct) return;
+        showRentalHistory(currentEditProduct.id);
     });
 
     saveBtn.addEventListener('click', () => {
@@ -988,6 +1134,46 @@ function initEditProductModal() {
 
         closeEditProductModal();
     });
+}
+
+// 임대 기록 표시
+function showRentalHistory(productId) {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+
+    const rentalHistory = product.rentalHistory || [];
+
+    let historyHtml = '';
+    if (rentalHistory.length === 0) {
+        historyHtml = '<div class="empty-state">임대 기록이 없습니다.</div>';
+    } else {
+        historyHtml = rentalHistory.slice().reverse().map((record, index) => {
+            const rentalDate = new Date(record.rentalDate).toLocaleDateString('ko-KR');
+            const returnDate = record.returnDate ? new Date(record.returnDate).toLocaleDateString('ko-KR') : '임대중';
+            const usedHours = record.usedHours !== undefined ? `${record.usedHours}시간` : '-';
+            const note = record.note || '-';
+
+            return `
+                <div class="rental-history-item">
+                    <div class="rental-history-header">
+                        <span class="rental-company">${record.company}</span>
+                        <span class="rental-date">${rentalDate} ~ ${returnDate}</span>
+                    </div>
+                    <div class="rental-history-details">
+                        <span>사용시간: ${usedHours}</span>
+                        <span>비고: ${note}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    document.getElementById('rentalHistoryContent').innerHTML = historyHtml;
+    document.getElementById('rentalHistoryModal').classList.add('show');
+}
+
+function closeRentalHistoryModal() {
+    document.getElementById('rentalHistoryModal').classList.remove('show');
 }
 
 function openEditProductModal(productId) {
