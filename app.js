@@ -921,6 +921,7 @@ function initEditProductModal() {
     const closeBtn = document.getElementById('editModalClose');
     const cancelBtn = document.getElementById('editModalCancel');
     const saveBtn = document.getElementById('editModalSave');
+    const downloadBtn = document.getElementById('editQrDownload');
 
     closeBtn.addEventListener('click', closeEditProductModal);
     cancelBtn.addEventListener('click', closeEditProductModal);
@@ -929,6 +930,27 @@ function initEditProductModal() {
         if (e.target === modal) {
             closeEditProductModal();
         }
+    });
+
+    // QR 다운로드 버튼
+    downloadBtn.addEventListener('click', () => {
+        if (!currentEditProduct) return;
+
+        const qrContainer = document.getElementById('editQrCode');
+        const img = qrContainer.querySelector('img');
+        const canvas = qrContainer.querySelector('canvas');
+
+        const link = document.createElement('a');
+        link.download = `QR_${currentEditProduct.id}.png`;
+
+        if (canvas) {
+            link.href = canvas.toDataURL('image/png');
+        } else if (img) {
+            link.href = img.src;
+        }
+
+        link.click();
+        showToast('QR코드가 다운로드되었습니다.', 'success');
     });
 
     saveBtn.addEventListener('click', () => {
@@ -980,7 +1002,33 @@ function openEditProductModal(productId) {
     document.getElementById('editProductStatus').value = product.status;
     document.getElementById('editProductNote').value = product.lastNote || '';
 
+    // QR코드 생성
+    generateEditModalQR(productId);
+
     document.getElementById('editProductModal').classList.add('show');
+}
+
+function generateEditModalQR(productId) {
+    const qrContainer = document.getElementById('editQrCode');
+    qrContainer.innerHTML = '';
+
+    if (typeof QRCode === 'undefined') {
+        qrContainer.innerHTML = '<p style="color: #999; font-size: 12px;">QR 로딩 중...</p>';
+        return;
+    }
+
+    try {
+        new QRCode(qrContainer, {
+            text: productId,
+            width: 120,
+            height: 120,
+            colorDark: '#000000',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.H
+        });
+    } catch (e) {
+        console.error('QR 생성 오류:', e);
+    }
 }
 
 function closeEditProductModal() {
