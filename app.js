@@ -19,6 +19,15 @@ const STATUS_PROGRESS = {
     '출고준비완료': 100
 };
 
+// 진행률에 따른 색상 클래스
+function getProgressColorClass(progress) {
+    if (progress === 0) return 'progress-gray';
+    if (progress <= 50) return 'progress-orange';
+    if (progress <= 70) return 'progress-yellow';
+    if (progress <= 90) return 'progress-lime';
+    return 'progress-green';
+}
+
 // ===== 상태 관리 =====
 let products = [];
 let history = [];
@@ -824,6 +833,9 @@ function updateDashboardList() {
             `<span class="rental-badge">임대중: ${product.rentalCompany}</span>` :
             (product.lastCompany ? `<span class="last-rental">최근: ${product.lastCompany}</span>` : '');
 
+        const itemProgress = STATUS_PROGRESS[product.status] || 0;
+        const progressClass = getProgressColorClass(itemProgress);
+
         return `
             <div class="product-item dashboard-item" data-id="${product.id}">
                 <span class="product-status-badge ${product.status}"></span>
@@ -832,6 +844,12 @@ function updateDashboardList() {
                     <div class="product-id">${product.id} | 잔여: ${product.remainingHours || product.totalHours}h</div>
                     ${rentalInfo}
                     ${product.lastNote ? `<div class="product-note">메모: ${product.lastNote}</div>` : ''}
+                    <div class="item-progress-section">
+                        <div class="item-progress-bar">
+                            <div class="item-progress-fill ${progressClass}" style="width: ${itemProgress}%"></div>
+                        </div>
+                        <span class="item-progress-text">${itemProgress}%</span>
+                    </div>
                 </div>
                 <span class="product-status ${product.status}">${product.status}</span>
             </div>

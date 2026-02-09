@@ -409,6 +409,56 @@ body {
     border-radius: 4px;
 }
 
+/* 개별 항목 진행률 바 */
+.item-progress-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.item-progress-bar {
+    flex: 1;
+    height: 6px;
+    background-color: var(--gray-200);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.item-progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.item-progress-fill.progress-gray {
+    background-color: var(--gray-400);
+}
+
+.item-progress-fill.progress-orange {
+    background-color: #fb923c;
+}
+
+.item-progress-fill.progress-yellow {
+    background-color: #fbbf24;
+}
+
+.item-progress-fill.progress-lime {
+    background-color: #a3e635;
+}
+
+.item-progress-fill.progress-green {
+    background-color: var(--success-color);
+}
+
+.item-progress-text {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gray-500);
+    min-width: 32px;
+    text-align: right;
+}
+
 .product-category {
     font-size: 11px;
     color: var(--gray-500);
