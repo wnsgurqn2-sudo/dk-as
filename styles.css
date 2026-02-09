@@ -293,6 +293,17 @@ body {
 
 .product-item.dashboard-item {
     flex-wrap: wrap;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.product-item.dashboard-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.product-item.dashboard-item:active {
+    transform: translateY(0);
 }
 
 .product-status-badge {
@@ -521,9 +532,19 @@ body {
     background-color: #059669;
 }
 
-/* 임대/회수 폼 */
+.btn-action.status-change {
+    background-color: var(--warning-color);
+    color: var(--white);
+}
+
+.btn-action.status-change:hover {
+    background-color: #d97706;
+}
+
+/* 임대/회수/상태변경 폼 */
 .rental-form,
-.return-form {
+.return-form,
+.status-form {
     margin-top: 16px;
 }
 
@@ -624,6 +645,15 @@ body {
 
 .history-item.return {
     border-left-color: var(--success-color);
+}
+
+.history-item.status-change {
+    border-left-color: var(--warning-color);
+}
+
+.history-item.status-change .history-type {
+    background-color: #fffbeb;
+    color: #d97706;
 }
 
 .history-time {
@@ -986,6 +1016,26 @@ body {
 
 .modal-footer button {
     flex: 1;
+}
+
+/* 제품 편집 모달 */
+.edit-product-info {
+    text-align: center;
+    padding: 12px 16px;
+    background-color: var(--gray-100);
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+}
+
+.edit-product-info h4 {
+    font-size: 18px;
+    color: var(--gray-900);
+    margin-bottom: 4px;
+}
+
+.edit-product-info p {
+    font-size: 13px;
+    color: var(--gray-500);
 }
 
 /* ===== 반응형 ===== */

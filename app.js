@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initSearch();
     initQRGenerator();
     initModal();
+    initEditProductModal();
     initDeleteAll();
     initScanActions();
     updateDashboard();
@@ -154,12 +155,16 @@ function showScanActionPanel(product) {
     document.getElementById('actionButtons').style.display = 'flex';
     document.getElementById('rentalForm').style.display = 'none';
     document.getElementById('returnForm').style.display = 'none';
+    document.getElementById('statusForm').style.display = 'none';
 
     panel.style.display = 'block';
 }
 
 function hideScanActionPanel() {
     document.getElementById('scanActionPanel').style.display = 'none';
+    document.getElementById('rentalForm').style.display = 'none';
+    document.getElementById('returnForm').style.display = 'none';
+    document.getElementById('statusForm').style.display = 'none';
     currentScannedProduct = null;
 
     // 스캐너 재시작
@@ -168,7 +173,7 @@ function hideScanActionPanel() {
     }, 500);
 }
 
-// ===== 스캔 액션 (임대/회수) =====
+// ===== 스캔 액션 (임대/회수/상태변경) =====
 function initScanActions() {
     // 임대 버튼
     document.getElementById('btnRental').addEventListener('click', () => {
@@ -196,12 +201,21 @@ function initScanActions() {
 
         document.getElementById('actionButtons').style.display = 'none';
         document.getElementById('returnForm').style.display = 'block';
-        document.getElementById('usedHours').value = '';
+        document.getElementById('returnHours').value = '';
         document.getElementById('returnNote').value = '';
 
         const remaining = currentScannedProduct.remainingHours || currentScannedProduct.totalHours;
         document.getElementById('usedTimeInfo').textContent =
-            `${currentScannedProduct.rentalCompany} 임대 | 현재 잔여시간: ${remaining}시간`;
+            `${currentScannedProduct.rentalCompany} 임대 | 회수 전 잔여시간: ${remaining}시간`;
+    });
+
+    // 상태변경 버튼
+    document.getElementById('btnStatusChange').addEventListener('click', () => {
+        if (!currentScannedProduct) return;
+
+        document.getElementById('actionButtons').style.display = 'none';
+        document.getElementById('statusForm').style.display = 'block';
+        document.getElementById('statusNote').value = currentScannedProduct.lastNote || '';
     });
 
     // 임대 취소
@@ -247,28 +261,34 @@ function initScanActions() {
         hideScanActionPanel();
     });
 
-    // 사용시간 입력 시 차감 계산 표시
-    document.getElementById('usedHours').addEventListener('input', (e) => {
-        const usedHours = parseInt(e.target.value) || 0;
-        const remaining = currentScannedProduct.remainingHours || currentScannedProduct.totalHours;
-        const newRemaining = Math.max(0, remaining - usedHours);
-
-        document.getElementById('usedTimeInfo').textContent =
-            `${currentScannedProduct.rentalCompany} 사용: ${usedHours}시간 | 잔여: ${remaining}시간 → ${newRemaining}시간`;
+    // 상태변경 취소
+    document.getElementById('btnStatusCancel').addEventListener('click', () => {
+        hideScanActionPanel();
     });
 
-    // 상태 버튼 클릭 (임대회수 완료)
-    document.querySelectorAll('.status-btn').forEach(btn => {
+    // 회수 후 잔여시간 입력 시 실사용시간 계산 표시
+    document.getElementById('returnHours').addEventListener('input', (e) => {
+        const newRemaining = parseInt(e.target.value) || 0;
+        const previousRemaining = currentScannedProduct.remainingHours || currentScannedProduct.totalHours;
+        const usedHours = Math.max(0, previousRemaining - newRemaining);
+
+        document.getElementById('usedTimeInfo').innerHTML =
+            `<strong>회수 전:</strong> ${previousRemaining}시간 → <strong>회수 후:</strong> ${newRemaining}시간<br>` +
+            `<strong style="color: #dc2626;">실사용시간: ${usedHours}시간</strong> (${currentScannedProduct.rentalCompany})`;
+    });
+
+    // 임대회수 상태 버튼 클릭
+    document.querySelectorAll('#returnStatusButtons .status-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const status = btn.dataset.status;
-            const usedHours = parseInt(document.getElementById('usedHours').value) || 0;
+            const newRemaining = parseInt(document.getElementById('returnHours').value) || 0;
             const note = document.getElementById('returnNote').value.trim();
 
             // 제품 업데이트
             const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
             if (productIndex !== -1) {
-                const remaining = products[productIndex].remainingHours || products[productIndex].totalHours;
-                const newRemaining = Math.max(0, remaining - usedHours);
+                const previousRemaining = products[productIndex].remainingHours || products[productIndex].totalHours;
+                const usedHours = Math.max(0, previousRemaining - newRemaining);
 
                 const returnRecord = {
                     type: '임대회수',
@@ -276,7 +296,7 @@ function initScanActions() {
                     productName: currentScannedProduct.name,
                     company: products[productIndex].rentalCompany,
                     usedHours: usedHours,
-                    previousRemaining: remaining,
+                    previousRemaining: previousRemaining,
                     newRemaining: newRemaining,
                     note: note,
                     status: status,
@@ -289,13 +309,48 @@ function initScanActions() {
                 products[productIndex].lastUpdated = new Date().toISOString();
                 products[productIndex].lastNote = note;
                 products[productIndex].lastCompany = products[productIndex].rentalCompany;
+                products[productIndex].lastUsedHours = usedHours;
                 products[productIndex].rentalCompany = null;
                 products[productIndex].rentalDate = null;
 
                 saveData();
                 addHistory(returnRecord);
 
-                showToast(`${currentScannedProduct.name} 회수 완료 - ${status}`, 'success');
+                showToast(`${currentScannedProduct.name} 회수 완료 - 실사용: ${usedHours}h, ${status}`, 'success');
+                updateDashboard();
+            }
+
+            hideScanActionPanel();
+        });
+    });
+
+    // 상태변경 버튼 클릭
+    document.querySelectorAll('#statusChangeButtons .status-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const status = btn.dataset.status;
+            const note = document.getElementById('statusNote').value.trim();
+
+            const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
+            if (productIndex !== -1) {
+                const previousStatus = products[productIndex].status;
+
+                products[productIndex].status = status;
+                products[productIndex].lastUpdated = new Date().toISOString();
+                products[productIndex].lastNote = note;
+
+                saveData();
+
+                addHistory({
+                    type: '상태변경',
+                    productId: currentScannedProduct.id,
+                    productName: currentScannedProduct.name,
+                    previousStatus: previousStatus,
+                    newStatus: status,
+                    note: note,
+                    time: new Date().toISOString()
+                });
+
+                showToast(`${currentScannedProduct.name} 상태 변경: ${status}`, 'success');
                 updateDashboard();
             }
 
@@ -329,14 +384,20 @@ function updateHistoryList() {
         });
 
         let detail = '';
+        let itemClass = '';
         if (item.type === '임대') {
             detail = `→ ${item.company}`;
+            itemClass = 'rental';
         } else if (item.type === '임대회수') {
-            detail = `← ${item.company} | ${item.usedHours}h | ${item.status}`;
+            detail = `← ${item.company} | ${item.previousRemaining}h→${item.newRemaining}h (실사용:${item.usedHours}h) | ${item.status}`;
+            itemClass = 'return';
+        } else if (item.type === '상태변경') {
+            detail = `${item.previousStatus} → ${item.newStatus}`;
+            itemClass = 'status-change';
         }
 
         return `
-            <div class="history-item ${item.type === '임대' ? 'rental' : 'return'}">
+            <div class="history-item ${itemClass}">
                 <span class="history-time">${timeStr}</span>
                 <span class="history-type">${item.type}</span>
                 <span class="history-product">${item.productName}</span>
@@ -637,6 +698,14 @@ function updateDashboardList() {
             </div>
         `;
     }).join('');
+
+    // 대시보드 항목 클릭 이벤트 추가
+    listDiv.querySelectorAll('.dashboard-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const productId = item.dataset.id;
+            openEditProductModal(productId);
+        });
+    });
 }
 
 // ===== QR 코드 생성 =====
@@ -842,6 +911,81 @@ function showModal(title, body, onConfirm) {
 function hideModal() {
     document.getElementById('modalOverlay').classList.remove('show');
     modalConfirmCallback = null;
+}
+
+// ===== 제품 편집 모달 =====
+let currentEditProduct = null;
+
+function initEditProductModal() {
+    const modal = document.getElementById('editProductModal');
+    const closeBtn = document.getElementById('editModalClose');
+    const cancelBtn = document.getElementById('editModalCancel');
+    const saveBtn = document.getElementById('editModalSave');
+
+    closeBtn.addEventListener('click', closeEditProductModal);
+    cancelBtn.addEventListener('click', closeEditProductModal);
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeEditProductModal();
+        }
+    });
+
+    saveBtn.addEventListener('click', () => {
+        if (!currentEditProduct) return;
+
+        const newStatus = document.getElementById('editProductStatus').value;
+        const newNote = document.getElementById('editProductNote').value.trim();
+
+        const productIndex = products.findIndex(p => p.id === currentEditProduct.id);
+        if (productIndex !== -1) {
+            const previousStatus = products[productIndex].status;
+
+            products[productIndex].status = newStatus;
+            products[productIndex].lastNote = newNote;
+            products[productIndex].lastUpdated = new Date().toISOString();
+
+            saveData();
+
+            // 상태가 변경된 경우에만 기록 추가
+            if (previousStatus !== newStatus) {
+                addHistory({
+                    type: '상태변경',
+                    productId: currentEditProduct.id,
+                    productName: currentEditProduct.name,
+                    previousStatus: previousStatus,
+                    newStatus: newStatus,
+                    note: newNote,
+                    time: new Date().toISOString()
+                });
+            }
+
+            showToast(`${currentEditProduct.name} 정보가 수정되었습니다.`, 'success');
+            updateDashboard();
+        }
+
+        closeEditProductModal();
+    });
+}
+
+function openEditProductModal(productId) {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+
+    currentEditProduct = product;
+
+    document.getElementById('editProductName').textContent = product.name;
+    document.getElementById('editProductDetails').textContent =
+        `${product.id} | 잔여: ${product.remainingHours || product.totalHours}h`;
+    document.getElementById('editProductStatus').value = product.status;
+    document.getElementById('editProductNote').value = product.lastNote || '';
+
+    document.getElementById('editProductModal').classList.add('show');
+}
+
+function closeEditProductModal() {
+    document.getElementById('editProductModal').classList.remove('show');
+    currentEditProduct = null;
 }
 
 // 전역 함수로 노출
