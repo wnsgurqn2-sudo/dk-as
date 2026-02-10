@@ -769,7 +769,7 @@ function updateProductList() {
     }
 
     listDiv.innerHTML = products.map(product => `
-        <div class="product-item" data-id="${product.id}">
+        <div class="product-item product-manage-item" data-id="${product.id}">
             <span class="product-status-badge ${product.status}"></span>
             <div class="product-info">
                 <div class="product-name">${product.name}</div>
@@ -779,10 +779,30 @@ function updateProductList() {
             ${product.isRented ? `<span class="rental-badge">임대중</span>` : ''}
             <span class="product-status ${product.status}">${product.status}</span>
             <div class="product-actions">
-                <button class="btn-icon danger" onclick="deleteProduct('${product.id}')" title="삭제">🗑️</button>
+                <button class="btn-icon danger delete-btn" data-id="${product.id}" title="삭제">🗑️</button>
             </div>
         </div>
     `).join('');
+
+    // 제품 항목 클릭 이벤트 (삭제 버튼 제외)
+    listDiv.querySelectorAll('.product-manage-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            // 삭제 버튼 클릭 시 모달 열지 않음
+            if (e.target.closest('.delete-btn')) {
+                return;
+            }
+            const productId = item.dataset.id;
+            openEditProductModal(productId);
+        });
+    });
+
+    // 삭제 버튼 이벤트
+    listDiv.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteProduct(btn.dataset.id);
+        });
+    });
 }
 
 function deleteProduct(productId) {

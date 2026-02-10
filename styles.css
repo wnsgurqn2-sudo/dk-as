@@ -342,6 +342,20 @@ body {
     transform: translateY(0);
 }
 
+.product-item.product-manage-item {
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.product-item.product-manage-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.product-item.product-manage-item:active {
+    transform: translateY(0);
+}
+
 .product-status-badge {
     width: 10px;
     height: 10px;
