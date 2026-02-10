@@ -7,12 +7,13 @@
 const STORAGE_KEY = 'dk_as_products';
 const HISTORY_KEY = 'dk_as_history';
 const PHOTOS_KEY = 'dk_as_photos';
-const STATUS_TYPES = ['미점검', '수리대기', '수리완료', '청소대기', '청소완료', '출고준비완료'];
+const STATUS_TYPES = ['미점검', '수리대기', '수리중', '수리완료', '청소대기', '청소완료', '출고준비완료'];
 
 // 상태별 진행률
 const STATUS_PROGRESS = {
     '미점검': 0,
     '수리대기': 0,
+    '수리중': 30,
     '수리완료': 50,
     '청소대기': 70,
     '청소완료': 90,
@@ -54,6 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initModal();
     initEditProductModal();
     initRentalHistoryModal();
+    initRepairHistoryModal();
     initPhotoCapture();
     initDeleteAll();
     initScanActions();
@@ -77,6 +79,59 @@ function initRentalHistoryModal() {
             closeRentalHistoryModal();
         }
     });
+}
+
+// ===== 수리기록 모달 =====
+function initRepairHistoryModal() {
+    const modal = document.getElementById('repairHistoryModal');
+    const closeBtn = document.getElementById('repairHistoryClose');
+    const backBtn = document.getElementById('repairHistoryBack');
+
+    closeBtn.addEventListener('click', closeRepairHistoryModal);
+    backBtn.addEventListener('click', closeRepairHistoryModal);
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeRepairHistoryModal();
+        }
+    });
+}
+
+function showRepairHistory(productId) {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+
+    const repairHistory = product.repairHistory || [];
+
+    let historyHtml = '';
+    if (repairHistory.length === 0) {
+        historyHtml = '<div class="empty-state">수리 기록이 없습니다.</div>';
+    } else {
+        historyHtml = repairHistory.slice().reverse().map((record) => {
+            const startDate = new Date(record.startDate).toLocaleDateString('ko-KR');
+            const endDate = record.endDate ? new Date(record.endDate).toLocaleDateString('ko-KR') : '수리중';
+            const note = record.note || '-';
+
+            return `
+                <div class="repair-history-item">
+                    <div class="repair-history-header">
+                        <span class="repair-status ${record.endDate ? 'completed' : 'in-progress'}">${record.endDate ? '완료' : '수리중'}</span>
+                        <span class="repair-date">${startDate} ~ ${endDate}</span>
+                    </div>
+                    <div class="repair-history-details">
+                        <span class="repair-note">${note}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    document.getElementById('repairHistoryContent').innerHTML = historyHtml;
+    document.getElementById('repairHistoryModal').classList.add('show');
+}
+
+function closeRepairHistoryModal() {
+    document.getElementById('repairHistoryModal').classList.remove('show');
 }
 
 // ===== 사진 촬영 =====
@@ -919,19 +974,23 @@ function initSearch() {
 }
 
 function updateDashboard() {
-    // 통계 계산 (6개 상태)
+    // 통계 계산 (임대중 + 7개 상태)
     const total = products.length;
-    const unchecked = products.filter(p => p.status === '미점검').length;
-    const repairWait = products.filter(p => p.status === '수리대기').length;
-    const repairDone = products.filter(p => p.status === '수리완료').length;
-    const cleanWait = products.filter(p => p.status === '청소대기').length;
-    const cleanDone = products.filter(p => p.status === '청소완료').length;
-    const ready = products.filter(p => p.status === '출고준비완료').length;
+    const rented = products.filter(p => p.isRented).length;
+    const unchecked = products.filter(p => !p.isRented && p.status === '미점검').length;
+    const repairWait = products.filter(p => !p.isRented && p.status === '수리대기').length;
+    const repairing = products.filter(p => !p.isRented && p.status === '수리중').length;
+    const repairDone = products.filter(p => !p.isRented && p.status === '수리완료').length;
+    const cleanWait = products.filter(p => !p.isRented && p.status === '청소대기').length;
+    const cleanDone = products.filter(p => !p.isRented && p.status === '청소완료').length;
+    const ready = products.filter(p => !p.isRented && p.status === '출고준비완료').length;
 
     // 통계 카드 업데이트
     document.getElementById('statTotal').textContent = total;
+    document.getElementById('statRented').textContent = rented;
     document.getElementById('statUnchecked').textContent = unchecked;
     document.getElementById('statRepairWait').textContent = repairWait;
+    document.getElementById('statRepairing').textContent = repairing;
     document.getElementById('statRepairDone').textContent = repairDone;
     document.getElementById('statCleanWait').textContent = cleanWait;
     document.getElementById('statCleanDone').textContent = cleanDone;
@@ -939,8 +998,10 @@ function updateDashboard() {
 
     // 필터 버튼 개수 업데이트
     document.getElementById('filterCountAll').textContent = total;
+    document.getElementById('filterCountRented').textContent = rented;
     document.getElementById('filterCountUnchecked').textContent = unchecked;
     document.getElementById('filterCountRepairWait').textContent = repairWait;
+    document.getElementById('filterCountRepairing').textContent = repairing;
     document.getElementById('filterCountRepairDone').textContent = repairDone;
     document.getElementById('filterCountCleanWait').textContent = cleanWait;
     document.getElementById('filterCountCleanDone').textContent = cleanDone;
@@ -971,7 +1032,11 @@ function updateDashboardList() {
     let filteredProducts = products;
 
     if (currentFilter !== 'all') {
-        filteredProducts = filteredProducts.filter(p => p.status === currentFilter);
+        if (currentFilter === '임대중') {
+            filteredProducts = filteredProducts.filter(p => p.isRented);
+        } else {
+            filteredProducts = filteredProducts.filter(p => !p.isRented && p.status === currentFilter);
+        }
     }
 
     // 검색
@@ -1125,6 +1190,7 @@ function initEditProductModal() {
     const saveBtn = document.getElementById('editModalSave');
     const downloadBtn = document.getElementById('editQrDownload');
     const historyBtn = document.getElementById('editHistoryBtn');
+    const repairHistoryBtn = document.getElementById('editRepairHistoryBtn');
 
     closeBtn.addEventListener('click', closeEditProductModal);
     cancelBtn.addEventListener('click', closeEditProductModal);
@@ -1162,8 +1228,20 @@ function initEditProductModal() {
         showRentalHistory(currentEditProduct.id);
     });
 
+    // 수리기록 버튼
+    repairHistoryBtn.addEventListener('click', () => {
+        if (!currentEditProduct) return;
+        showRepairHistory(currentEditProduct.id);
+    });
+
     saveBtn.addEventListener('click', () => {
         if (!currentEditProduct) return;
+
+        // 임대중인 경우 저장하지 않음
+        if (currentEditProduct.isRented) {
+            showToast('임대중인 제품은 상태를 변경할 수 없습니다.', 'error');
+            return;
+        }
 
         const newStatus = document.getElementById('editProductStatus').value;
         const newNote = document.getElementById('editProductNote').value.trim();
@@ -1171,6 +1249,29 @@ function initEditProductModal() {
         const productIndex = products.findIndex(p => p.id === currentEditProduct.id);
         if (productIndex !== -1) {
             const previousStatus = products[productIndex].status;
+
+            // 수리기록 처리
+            if (!products[productIndex].repairHistory) {
+                products[productIndex].repairHistory = [];
+            }
+
+            // 수리중으로 변경 시 수리 시작 기록
+            if (newStatus === '수리중' && previousStatus !== '수리중') {
+                products[productIndex].repairHistory.push({
+                    startDate: new Date().toISOString(),
+                    endDate: null,
+                    note: newNote
+                });
+            }
+
+            // 수리중에서 다른 상태로 변경 시 수리 완료 기록
+            if (previousStatus === '수리중' && newStatus !== '수리중') {
+                const lastRepair = products[productIndex].repairHistory[products[productIndex].repairHistory.length - 1];
+                if (lastRepair && !lastRepair.endDate) {
+                    lastRepair.endDate = new Date().toISOString();
+                    lastRepair.endNote = newNote;
+                }
+            }
 
             products[productIndex].status = newStatus;
             products[productIndex].lastNote = newNote;
@@ -1256,7 +1357,7 @@ function showRentalHistory(productId) {
                     </div>
                     <div class="rental-history-details">
                         <span>사용시간: ${usedHours}</span>
-                        <span>비고: ${note}</span>
+                        <span class="history-note">비고: <span class="note-text">${note}</span></span>
                     </div>
                     ${rentalPhotosHtml}
                     ${returnPhotosHtml}
@@ -1302,7 +1403,31 @@ function openEditProductModal(productId) {
     document.getElementById('editProductName').textContent = product.name;
     document.getElementById('editProductDetails').textContent =
         `${product.id} | 잔여: ${product.remainingHours || product.totalHours}h`;
-    document.getElementById('editProductStatus').value = product.status;
+
+    const statusSelect = document.getElementById('editProductStatus');
+    const statusFormGroup = statusSelect.closest('.form-group');
+
+    // 임대중인 경우 상태변경 비활성화
+    if (product.isRented) {
+        statusSelect.disabled = true;
+        statusSelect.innerHTML = '<option value="임대중">임대중</option>';
+        statusSelect.value = '임대중';
+        statusFormGroup.classList.add('disabled');
+    } else {
+        statusSelect.disabled = false;
+        statusSelect.innerHTML = `
+            <option value="미점검">미점검</option>
+            <option value="수리대기">수리대기</option>
+            <option value="수리중">수리중</option>
+            <option value="수리완료">수리완료</option>
+            <option value="청소대기">청소대기</option>
+            <option value="청소완료">청소완료</option>
+            <option value="출고준비완료">출고준비완료</option>
+        `;
+        statusSelect.value = product.status;
+        statusFormGroup.classList.remove('disabled');
+    }
+
     document.getElementById('editProductNote').value = product.lastNote || '';
 
     // QR코드 생성

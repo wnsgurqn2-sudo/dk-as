@@ -62,41 +62,43 @@
                     <input type="text" id="dashboardSearch" class="search-input" placeholder="제품명, 제품ID, 업체명으로 검색...">
                 </div>
 
-                <!-- 통계 카드 -->
-                <div class="stats-container stats-7">
+                <!-- 현황 카드 -->
+                <div class="stats-container stats-9">
                     <div class="stat-card total" data-filter="all">
                         <div class="stat-number" id="statTotal">0</div>
                         <div class="stat-label">전체</div>
                     </div>
+                    <div class="stat-card rented" data-filter="임대중">
+                        <div class="stat-number" id="statRented">0</div>
+                        <div class="stat-label">임대중</div>
+                    </div>
                     <div class="stat-card unchecked" data-filter="미점검">
                         <div class="stat-number" id="statUnchecked">0</div>
                         <div class="stat-label">미점검</div>
-                        <div class="stat-progress">0%</div>
                     </div>
                     <div class="stat-card repair-wait" data-filter="수리대기">
                         <div class="stat-number" id="statRepairWait">0</div>
                         <div class="stat-label">수리대기</div>
-                        <div class="stat-progress">0%</div>
+                    </div>
+                    <div class="stat-card repairing" data-filter="수리중">
+                        <div class="stat-number" id="statRepairing">0</div>
+                        <div class="stat-label">수리중</div>
                     </div>
                     <div class="stat-card repair-done" data-filter="수리완료">
                         <div class="stat-number" id="statRepairDone">0</div>
                         <div class="stat-label">수리완료</div>
-                        <div class="stat-progress">50%</div>
                     </div>
                     <div class="stat-card clean-wait" data-filter="청소대기">
                         <div class="stat-number" id="statCleanWait">0</div>
                         <div class="stat-label">청소대기</div>
-                        <div class="stat-progress">70%</div>
                     </div>
                     <div class="stat-card clean-done" data-filter="청소완료">
                         <div class="stat-number" id="statCleanDone">0</div>
                         <div class="stat-label">청소완료</div>
-                        <div class="stat-progress">90%</div>
                     </div>
                     <div class="stat-card ready" data-filter="출고준비완료">
                         <div class="stat-number" id="statReady">0</div>
                         <div class="stat-label">출고준비</div>
-                        <div class="stat-progress">100%</div>
                     </div>
                 </div>
 
@@ -114,8 +116,10 @@
                 <!-- 필터 버튼 -->
                 <div class="filter-section">
                     <button class="filter-btn active" data-filter="all">전체(<span id="filterCountAll">0</span>)</button>
+                    <button class="filter-btn" data-filter="임대중">임대중(<span id="filterCountRented">0</span>)</button>
                     <button class="filter-btn" data-filter="미점검">미점검(<span id="filterCountUnchecked">0</span>)</button>
                     <button class="filter-btn" data-filter="수리대기">수리대기(<span id="filterCountRepairWait">0</span>)</button>
+                    <button class="filter-btn" data-filter="수리중">수리중(<span id="filterCountRepairing">0</span>)</button>
                     <button class="filter-btn" data-filter="수리완료">수리완료(<span id="filterCountRepairDone">0</span>)</button>
                     <button class="filter-btn" data-filter="청소대기">청소대기(<span id="filterCountCleanWait">0</span>)</button>
                     <button class="filter-btn" data-filter="청소완료">청소완료(<span id="filterCountCleanDone">0</span>)</button>
@@ -201,9 +205,10 @@
                         </div>
                         <div class="form-group">
                             <label>회수 후 상태 선택 *</label>
-                            <div class="status-buttons status-6" id="returnStatusButtons">
+                            <div class="status-buttons status-7" id="returnStatusButtons">
                                 <button type="button" class="status-btn unchecked" data-status="미점검">미점검</button>
                                 <button type="button" class="status-btn repair-wait" data-status="수리대기">수리대기</button>
+                                <button type="button" class="status-btn repairing" data-status="수리중">수리중</button>
                                 <button type="button" class="status-btn repair-done" data-status="수리완료">수리완료</button>
                                 <button type="button" class="status-btn clean-wait" data-status="청소대기">청소대기</button>
                                 <button type="button" class="status-btn clean-done" data-status="청소완료">청소완료</button>
@@ -222,9 +227,10 @@
                             <label for="statusNote">비고</label>
                             <textarea id="statusNote" rows="2" placeholder="비고 입력"></textarea>
                         </div>
-                        <div class="status-buttons status-6" id="statusChangeButtons">
+                        <div class="status-buttons status-7" id="statusChangeButtons">
                             <button class="status-btn unchecked" data-status="미점검">미점검</button>
                             <button class="status-btn repair-wait" data-status="수리대기">수리대기</button>
+                            <button class="status-btn repairing" data-status="수리중">수리중</button>
                             <button class="status-btn repair-done" data-status="수리완료">수리완료</button>
                             <button class="status-btn clean-wait" data-status="청소대기">청소대기</button>
                             <button class="status-btn clean-done" data-status="청소완료">청소완료</button>
@@ -337,6 +343,7 @@
                     <div class="qr-btn-group">
                         <button type="button" class="btn-qr-download" id="editQrDownload">QR 다운로드</button>
                         <button type="button" class="btn-history" id="editHistoryBtn">임대기록</button>
+                        <button type="button" class="btn-repair-history" id="editRepairHistoryBtn">수리기록</button>
                     </div>
                 </div>
                 <div class="form-group">
@@ -344,6 +351,7 @@
                     <select id="editProductStatus">
                         <option value="미점검">미점검</option>
                         <option value="수리대기">수리대기</option>
+                        <option value="수리중">수리중</option>
                         <option value="수리완료">수리완료</option>
                         <option value="청소대기">청소대기</option>
                         <option value="청소완료">청소완료</option>
@@ -376,6 +384,24 @@
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" id="rentalHistoryBack">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 수리기록 모달 -->
+    <div class="modal-overlay" id="repairHistoryModal">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h3>수리 기록</h3>
+                <button class="modal-close" id="repairHistoryClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="repairHistoryContent" class="repair-history-list">
+                    <div class="empty-state">수리 기록이 없습니다.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="repairHistoryBack">닫기</button>
             </div>
         </div>
     </div>

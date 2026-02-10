@@ -174,6 +174,10 @@ body {
     grid-template-columns: repeat(4, 1fr);
 }
 
+.stats-container.stats-9 {
+    grid-template-columns: repeat(5, 1fr);
+}
+
 .stat-card {
     background-color: var(--white);
     border-radius: var(--radius);
@@ -216,6 +220,14 @@ body {
 
 .stat-card.ready {
     border-left-color: var(--success-color);
+}
+
+.stat-card.rented {
+    border-left-color: var(--info-color);
+}
+
+.stat-card.repairing {
+    border-left-color: #f97316;
 }
 
 .stat-number {
@@ -372,6 +384,10 @@ body {
     background-color: #f87171;
 }
 
+.product-status-badge.수리중 {
+    background-color: #f97316;
+}
+
 .product-status-badge.수리완료 {
     background-color: #fb923c;
 }
@@ -502,6 +518,11 @@ body {
 .product-status.수리대기 {
     background-color: #fef2f2;
     color: #dc2626;
+}
+
+.product-status.수리중 {
+    background-color: #ffedd5;
+    color: #c2410c;
 }
 
 .product-status.수리완료 {
@@ -766,6 +787,15 @@ body {
     background-color: #fef2f2;
 }
 
+.status-btn.repairing {
+    border-color: #f97316;
+    color: #c2410c;
+}
+
+.status-btn.repairing:hover {
+    background-color: #fff7ed;
+}
+
 .status-btn.repair-done {
     border-color: #fb923c;
     color: #ea580c;
@@ -816,6 +846,10 @@ body {
     background-color: #fef2f2;
 }
 
+.status-btn.repairing.selected {
+    background-color: #fff7ed;
+}
+
 .status-btn.repair-done.selected {
     background-color: #fff7ed;
 }
@@ -835,6 +869,11 @@ body {
 /* 6개 상태 버튼 그리드 */
 .status-buttons.status-6 {
     grid-template-columns: repeat(3, 1fr);
+}
+
+/* 7개 상태 버튼 그리드 */
+.status-buttons.status-7 {
+    grid-template-columns: repeat(4, 1fr);
 }
 
 /* 기존 호환성 */
@@ -1337,6 +1376,85 @@ body {
 
 .btn-history:hover {
     background-color: #1d4ed8;
+}
+
+.btn-repair-history {
+    padding: 8px 16px;
+    background-color: #f97316;
+    color: var(--white);
+    border: none;
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.btn-repair-history:hover {
+    background-color: #ea580c;
+}
+
+/* 비고 텍스트 빨간색 */
+.note-text {
+    color: #dc2626;
+    font-weight: 600;
+}
+
+/* 비활성화된 폼 그룹 */
+.form-group.disabled {
+    opacity: 0.6;
+}
+
+.form-group.disabled select {
+    cursor: not-allowed;
+    background-color: var(--gray-100);
+}
+
+/* 수리기록 아이템 */
+.repair-history-item {
+    padding: 16px;
+    background-color: var(--gray-50);
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+    border-left: 4px solid #f97316;
+}
+
+.repair-history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.repair-status {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.repair-status.in-progress {
+    background-color: #ffedd5;
+    color: #c2410c;
+}
+
+.repair-status.completed {
+    background-color: #d1fae5;
+    color: #059669;
+}
+
+.repair-date {
+    font-size: 13px;
+    color: var(--gray-600);
+}
+
+.repair-history-details {
+    font-size: 13px;
+    color: var(--gray-700);
+}
+
+.repair-note {
+    font-weight: 500;
 }
 
 /* 사진 촬영 */
