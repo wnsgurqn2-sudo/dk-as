@@ -1150,10 +1150,14 @@ function initEditProductModal() {
             }
 
             showToast(`${currentEditProduct.name} 정보가 수정되었습니다.`, 'success');
-            updateDashboard();
         }
 
+        // 모달 닫기 먼저 실행
         closeEditProductModal();
+
+        // UI 업데이트
+        updateDashboard();
+        updateProductList();
     });
 }
 
