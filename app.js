@@ -38,6 +38,9 @@ let html5QrCode = null;
 let isScanning = false;
 let currentScannedProduct = null;
 let currentPhotoType = null; // 'rental' or 'return'
+let rentalPhotos = []; // 임대 사진 배열
+let returnPhotos = []; // 회수 사진 배열
+const MAX_PHOTOS = 20; // 최대 사진 개수
 
 // ===== 초기화 =====
 document.addEventListener('DOMContentLoaded', () => {
@@ -80,27 +83,72 @@ function initRentalHistoryModal() {
 function initPhotoCapture() {
     // 임대 사진 촬영
     document.getElementById('rentalPhotoInput').addEventListener('change', (e) => {
-        handlePhotoCapture(e, 'rentalPhotoPreview');
+        handleMultiPhotoCapture(e, 'rental');
     });
 
     // 회수 사진 촬영
     document.getElementById('returnPhotoInput').addEventListener('change', (e) => {
-        handlePhotoCapture(e, 'returnPhotoPreview');
+        handleMultiPhotoCapture(e, 'return');
     });
 }
 
-function handlePhotoCapture(event, previewId) {
+function handleMultiPhotoCapture(event, type) {
     const file = event.target.files[0];
     if (!file) return;
 
+    const photos = type === 'rental' ? rentalPhotos : returnPhotos;
+
+    if (photos.length >= MAX_PHOTOS) {
+        showToast(`최대 ${MAX_PHOTOS}장까지만 촬영 가능합니다.`, 'error');
+        event.target.value = '';
+        return;
+    }
+
     const reader = new FileReader();
     reader.onload = (e) => {
-        const preview = document.getElementById(previewId);
-        preview.src = e.target.result;
-        preview.style.display = 'block';
+        photos.push(e.target.result);
+        updatePhotoList(type);
+        event.target.value = ''; // 같은 파일 다시 선택 가능하도록
     };
     reader.readAsDataURL(file);
 }
+
+function updatePhotoList(type) {
+    const photos = type === 'rental' ? rentalPhotos : returnPhotos;
+    const listId = type === 'rental' ? 'rentalPhotoList' : 'returnPhotoList';
+    const countId = type === 'rental' ? 'rentalPhotoCount' : 'returnPhotoCount';
+
+    document.getElementById(countId).textContent = photos.length;
+
+    const listDiv = document.getElementById(listId);
+    if (photos.length === 0) {
+        listDiv.innerHTML = '';
+        return;
+    }
+
+    listDiv.innerHTML = photos.map((photo, index) => `
+        <div class="photo-item">
+            <img src="${photo}" alt="사진 ${index + 1}">
+            <button type="button" class="photo-delete-btn" onclick="deletePhoto('${type}', ${index})">×</button>
+        </div>
+    `).join('');
+}
+
+function deletePhoto(type, index) {
+    const photos = type === 'rental' ? rentalPhotos : returnPhotos;
+    photos.splice(index, 1);
+    updatePhotoList(type);
+}
+
+function clearPhotos() {
+    rentalPhotos = [];
+    returnPhotos = [];
+    updatePhotoList('rental');
+    updatePhotoList('return');
+}
+
+// 전역 함수 노출
+window.deletePhoto = deletePhoto;
 
 // ===== 데이터 관리 =====
 function loadData() {
@@ -240,13 +288,10 @@ function hideScanActionPanel() {
     document.getElementById('returnForm').style.display = 'none';
     document.getElementById('statusForm').style.display = 'none';
 
-    // 사진 미리보기 초기화
-    document.getElementById('rentalPhotoPreview').src = '';
-    document.getElementById('rentalPhotoPreview').style.display = 'none';
+    // 사진 초기화
     document.getElementById('rentalPhotoInput').value = '';
-    document.getElementById('returnPhotoPreview').src = '';
-    document.getElementById('returnPhotoPreview').style.display = 'none';
     document.getElementById('returnPhotoInput').value = '';
+    clearPhotos();
 
     currentScannedProduct = null;
 
@@ -309,7 +354,6 @@ function initScanActions() {
     // 임대 저장
     document.getElementById('btnRentalSave').addEventListener('click', () => {
         const company = document.getElementById('rentalCompany').value.trim();
-        const photoData = document.getElementById('rentalPhotoPreview').src;
 
         if (!company) {
             showToast('업체명을 입력해주세요.', 'error');
@@ -324,7 +368,7 @@ function initScanActions() {
                 company: company,
                 rentalDate: new Date().toISOString(),
                 remainingHoursAtRental: products[productIndex].remainingHours || products[productIndex].totalHours,
-                photo: photoData && photoData !== '' ? photoData : null
+                photos: rentalPhotos.length > 0 ? [...rentalPhotos] : []
             };
 
             // 임대기록 배열 초기화 및 추가
@@ -382,7 +426,6 @@ function initScanActions() {
             const status = btn.dataset.status;
             const newRemaining = parseInt(document.getElementById('returnHours').value) || 0;
             const note = document.getElementById('returnNote').value.trim();
-            const photoData = document.getElementById('returnPhotoPreview').src;
 
             // 제품 업데이트
             const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
@@ -398,7 +441,7 @@ function initScanActions() {
                         currentRental.usedHours = usedHours;
                         currentRental.remainingHoursAtReturn = newRemaining;
                         currentRental.note = note;
-                        currentRental.returnPhoto = photoData && photoData !== '' ? photoData : null;
+                        currentRental.returnPhotos = returnPhotos.length > 0 ? [...returnPhotos] : [];
                     }
                 }
 
@@ -829,20 +872,47 @@ function updateDashboardList() {
     }
 
     listDiv.innerHTML = filteredProducts.map(product => {
-        const rentalInfo = product.isRented ?
-            `<span class="rental-badge">임대중: ${product.rentalCompany}</span>` :
-            (product.lastCompany ? `<span class="last-rental">최근: ${product.lastCompany}</span>` : '');
-
         const itemProgress = STATUS_PROGRESS[product.status] || 0;
         const progressClass = getProgressColorClass(itemProgress);
 
+        // 임대중인 제품: 임대중 + 업체명 + 임대일자 표시
+        let statusHtml = '';
+        let infoHtml = '';
+
+        if (product.isRented) {
+            const rentalDate = product.rentalDate ?
+                new Date(product.rentalDate).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) : '';
+            infoHtml = `
+                <div class="rental-info-box">
+                    <span class="rental-label">임대중</span>
+                    <span class="rental-detail">${product.rentalCompany} | ${rentalDate}</span>
+                </div>
+            `;
+            statusHtml = `<span class="rental-badge">임대중</span>`;
+        } else {
+            // 회수된 제품: 최근 회수일자 + 업체명 표시
+            const lastRentalRecord = product.rentalHistory && product.rentalHistory.length > 0 ?
+                product.rentalHistory[product.rentalHistory.length - 1] : null;
+
+            if (lastRentalRecord && lastRentalRecord.returnDate) {
+                const returnDate = new Date(lastRentalRecord.returnDate).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+                infoHtml = `
+                    <div class="return-info-box">
+                        <span class="return-label">최근회수</span>
+                        <span class="return-detail">${lastRentalRecord.company} | ${returnDate}</span>
+                    </div>
+                `;
+            }
+            statusHtml = `<span class="product-status ${product.status}">${product.status}</span>`;
+        }
+
         return `
             <div class="product-item dashboard-item" data-id="${product.id}">
-                <span class="product-status-badge ${product.status}"></span>
+                <span class="product-status-badge ${product.isRented ? '임대중' : product.status}"></span>
                 <div class="product-info">
                     <div class="product-name">${product.name}</div>
                     <div class="product-id">${product.id} | 잔여: ${product.remainingHours || product.totalHours}h</div>
-                    ${rentalInfo}
+                    ${infoHtml}
                     ${product.lastNote ? `<div class="product-note">메모: ${product.lastNote}</div>` : ''}
                     <div class="item-progress-section">
                         <div class="item-progress-bar">
@@ -851,7 +921,7 @@ function updateDashboardList() {
                         <span class="item-progress-text">${itemProgress}%</span>
                     </div>
                 </div>
-                <span class="product-status ${product.status}">${product.status}</span>
+                ${statusHtml}
             </div>
         `;
     }).join('');
@@ -865,162 +935,17 @@ function updateDashboardList() {
     });
 }
 
-// ===== QR 코드 생성 =====
+// ===== QR 코드 생성 (제품정보 모달용) =====
 function initQRGenerator() {
-    const generateBtn = document.getElementById('generateQrBtn');
-    const downloadBtn = document.getElementById('downloadQrBtn');
-    const generateSheetBtn = document.getElementById('generateSheetBtn');
-    const selectAllBtn = document.getElementById('selectAllProductsBtn');
-    const printSheetBtn = document.getElementById('printSheetBtn');
-
-    generateBtn.addEventListener('click', generateSingleQR);
-    downloadBtn.addEventListener('click', downloadQR);
-    generateSheetBtn.addEventListener('click', generateQRSheet);
-    selectAllBtn.addEventListener('click', selectAllProducts);
-    printSheetBtn.addEventListener('click', () => window.print());
+    // QR생성 탭이 삭제됨 - 제품정보 모달에서 QR 생성은 계속 지원
 }
 
 function updateQRProductSelect() {
-    const select = document.getElementById('qrProductSelect');
-
-    select.innerHTML = '<option value="">제품을 선택하세요</option>' +
-        products.map(p => `<option value="${p.id}">${p.name} (${p.id})</option>`).join('');
+    // QR생성 탭 삭제로 더 이상 사용하지 않음
 }
 
 function updateQRSheetProductList() {
-    const listDiv = document.getElementById('qrSheetProductList');
-
-    if (products.length === 0) {
-        listDiv.innerHTML = '<div class="empty-state">등록된 제품이 없습니다.</div>';
-        return;
-    }
-
-    listDiv.innerHTML = products.map(p => `
-        <div class="checkbox-item">
-            <input type="checkbox" id="qr_${p.id}" value="${p.id}">
-            <label for="qr_${p.id}">${p.name} (${p.id})</label>
-        </div>
-    `).join('');
-}
-
-function selectAllProducts() {
-    const checkboxes = document.querySelectorAll('#qrSheetProductList input[type="checkbox"]');
-    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
-
-    checkboxes.forEach(cb => {
-        cb.checked = !allChecked;
-    });
-}
-
-function generateSingleQR() {
-    const productId = document.getElementById('qrProductSelect').value;
-
-    if (!productId) {
-        showToast('제품을 선택해주세요.', 'error');
-        return;
-    }
-
-    if (typeof QRCode === 'undefined') {
-        showToast('QR 라이브러리 로딩 중... 잠시 후 다시 시도해주세요.', 'error');
-        return;
-    }
-
-    const product = products.find(p => p.id === productId);
-    const qrText = productId; // 제품ID만 QR에 포함
-
-    const qrContainer = document.getElementById('qrCanvas');
-    qrContainer.innerHTML = '';
-
-    try {
-        new QRCode(qrContainer, {
-            text: qrText,
-            width: 200,
-            height: 200,
-            colorDark: '#000000',
-            colorLight: '#ffffff',
-            correctLevel: QRCode.CorrectLevel.H
-        });
-
-        document.getElementById('qrPreview').style.display = 'block';
-        document.getElementById('qrText').textContent = `${product.name} (${product.id})`;
-        showToast('QR코드가 생성되었습니다.', 'success');
-    } catch (e) {
-        console.error('QR 생성 예외:', e);
-        showToast('QR코드 생성 오류: ' + e.message, 'error');
-    }
-}
-
-function downloadQR() {
-    const qrContainer = document.getElementById('qrCanvas');
-    const productId = document.getElementById('qrProductSelect').value;
-
-    const img = qrContainer.querySelector('img');
-    const canvas = qrContainer.querySelector('canvas');
-
-    const link = document.createElement('a');
-    link.download = `QR_${productId}.png`;
-
-    if (canvas) {
-        link.href = canvas.toDataURL('image/png');
-    } else if (img) {
-        link.href = img.src;
-    }
-
-    link.click();
-}
-
-function generateQRSheet() {
-    const checkboxes = document.querySelectorAll('#qrSheetProductList input[type="checkbox"]:checked');
-    const selectedIds = Array.from(checkboxes).map(cb => cb.value);
-
-    if (selectedIds.length === 0) {
-        showToast('제품을 선택해주세요.', 'error');
-        return;
-    }
-
-    if (typeof QRCode === 'undefined') {
-        showToast('QR 라이브러리 로딩 중... 잠시 후 다시 시도해주세요.', 'error');
-        return;
-    }
-
-    const sheetDiv = document.getElementById('qrSheet');
-    const previewDiv = document.getElementById('qrSheetPreview');
-
-    sheetDiv.innerHTML = '';
-
-    selectedIds.forEach(productId => {
-        const product = products.find(p => p.id === productId);
-
-        const itemDiv = document.createElement('div');
-        itemDiv.className = 'qr-sheet-item';
-
-        const qrDiv = document.createElement('div');
-        const label = document.createElement('div');
-        label.className = 'qr-label';
-        label.innerHTML = `${product.name}<br>${product.id}`;
-
-        itemDiv.appendChild(qrDiv);
-        itemDiv.appendChild(label);
-        sheetDiv.appendChild(itemDiv);
-
-        try {
-            new QRCode(qrDiv, {
-                text: productId,
-                width: 100,
-                height: 100,
-                colorDark: '#000000',
-                colorLight: '#ffffff',
-                correctLevel: QRCode.CorrectLevel.H
-            });
-        } catch (e) {
-            console.error('QR 시트 생성 오류:', e);
-        }
-    });
-
-    previewDiv.style.display = 'block';
-    previewDiv.scrollIntoView({ behavior: 'smooth' });
-
-    showToast(`${selectedIds.length}개 제품의 QR코드가 생성되었습니다.`, 'success');
+    // QR생성 탭 삭제로 더 이상 사용하지 않음
 }
 
 // ===== 유틸리티 =====
@@ -1171,6 +1096,34 @@ function showRentalHistory(productId) {
             const usedHours = record.usedHours !== undefined ? `${record.usedHours}시간` : '-';
             const note = record.note || '-';
 
+            // 임대 전 사진 (photos 또는 photo 호환)
+            let rentalPhotosHtml = '';
+            const rentalPhotos = record.photos || (record.photo ? [record.photo] : []);
+            if (rentalPhotos.length > 0) {
+                rentalPhotosHtml = `
+                    <div class="history-photos-section">
+                        <p class="photos-label">임대 전 사진 (${rentalPhotos.length}장)</p>
+                        <div class="history-photos">
+                            ${rentalPhotos.map((p, i) => `<img src="${p}" alt="임대 전 ${i+1}" onclick="showPhotoModal('${p}')">`).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // 회수 후 사진 (returnPhotos 또는 returnPhoto 호환)
+            let returnPhotosHtml = '';
+            const returnPhotos = record.returnPhotos || (record.returnPhoto ? [record.returnPhoto] : []);
+            if (returnPhotos.length > 0) {
+                returnPhotosHtml = `
+                    <div class="history-photos-section">
+                        <p class="photos-label">회수 후 사진 (${returnPhotos.length}장)</p>
+                        <div class="history-photos">
+                            ${returnPhotos.map((p, i) => `<img src="${p}" alt="회수 후 ${i+1}" onclick="showPhotoModal('${p}')">`).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
             return `
                 <div class="rental-history-item">
                     <div class="rental-history-header">
@@ -1181,6 +1134,8 @@ function showRentalHistory(productId) {
                         <span>사용시간: ${usedHours}</span>
                         <span>비고: ${note}</span>
                     </div>
+                    ${rentalPhotosHtml}
+                    ${returnPhotosHtml}
                 </div>
             `;
         }).join('');
@@ -1189,6 +1144,26 @@ function showRentalHistory(productId) {
     document.getElementById('rentalHistoryContent').innerHTML = historyHtml;
     document.getElementById('rentalHistoryModal').classList.add('show');
 }
+
+// 사진 확대 모달
+function showPhotoModal(src) {
+    const overlay = document.createElement('div');
+    overlay.className = 'photo-modal-overlay';
+    overlay.innerHTML = `
+        <div class="photo-modal-content">
+            <img src="${src}" alt="확대 사진">
+            <button class="photo-modal-close">×</button>
+        </div>
+    `;
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay || e.target.classList.contains('photo-modal-close')) {
+            overlay.remove();
+        }
+    });
+    document.body.appendChild(overlay);
+}
+
+window.showPhotoModal = showPhotoModal;
 
 function closeRentalHistoryModal() {
     document.getElementById('rentalHistoryModal').classList.remove('show');
