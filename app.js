@@ -136,13 +136,43 @@ function closeRepairHistoryModal() {
 
 // ===== 사진 촬영 =====
 function initPhotoCapture() {
-    // 임대 사진 촬영
-    document.getElementById('rentalPhotoInput').addEventListener('change', (e) => {
+    // 임대 - 카메라 버튼
+    document.getElementById('rentalCameraBtn').addEventListener('click', () => {
+        document.getElementById('rentalCameraInput').click();
+    });
+
+    // 임대 - 갤러리 버튼
+    document.getElementById('rentalGalleryBtn').addEventListener('click', () => {
+        document.getElementById('rentalGalleryInput').click();
+    });
+
+    // 임대 - 카메라 입력
+    document.getElementById('rentalCameraInput').addEventListener('change', (e) => {
         handleMultiPhotoCapture(e, 'rental');
     });
 
-    // 회수 사진 촬영
-    document.getElementById('returnPhotoInput').addEventListener('change', (e) => {
+    // 임대 - 갤러리 입력
+    document.getElementById('rentalGalleryInput').addEventListener('change', (e) => {
+        handleMultiPhotoCapture(e, 'rental');
+    });
+
+    // 회수 - 카메라 버튼
+    document.getElementById('returnCameraBtn').addEventListener('click', () => {
+        document.getElementById('returnCameraInput').click();
+    });
+
+    // 회수 - 갤러리 버튼
+    document.getElementById('returnGalleryBtn').addEventListener('click', () => {
+        document.getElementById('returnGalleryInput').click();
+    });
+
+    // 회수 - 카메라 입력
+    document.getElementById('returnCameraInput').addEventListener('change', (e) => {
+        handleMultiPhotoCapture(e, 'return');
+    });
+
+    // 회수 - 갤러리 입력
+    document.getElementById('returnGalleryInput').addEventListener('change', (e) => {
         handleMultiPhotoCapture(e, 'return');
     });
 }
@@ -472,8 +502,10 @@ function hideScanActionPanel() {
     document.getElementById('actionButtons').style.display = 'flex';
 
     // 사진 초기화
-    document.getElementById('rentalPhotoInput').value = '';
-    document.getElementById('returnPhotoInput').value = '';
+    document.getElementById('rentalCameraInput').value = '';
+    document.getElementById('rentalGalleryInput').value = '';
+    document.getElementById('returnCameraInput').value = '';
+    document.getElementById('returnGalleryInput').value = '';
     clearPhotos();
 
     // 입력 필드 초기화

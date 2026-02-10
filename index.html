@@ -19,7 +19,7 @@
     <link rel="icon" type="image/png" sizes="72x72" href="icons/icon-72x72.png">
     <link rel="apple-touch-icon" href="icons/icon-72x72.png">
 
-    <link rel="stylesheet" href="styles.css?v=23">
+    <link rel="stylesheet" href="styles.css?v=24">
     <!-- QR Code 스캔 라이브러리 -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <!-- QR Code 생성 라이브러리 -->
@@ -172,10 +172,16 @@
                         <div class="form-group">
                             <label>임대 전 상태사진 (<span id="rentalPhotoCount">0</span>/20)</label>
                             <div class="photo-capture-section">
-                                <label for="rentalPhotoInput" class="btn-photo">
-                                    <span>📷</span> 사진 추가
-                                </label>
-                                <input type="file" id="rentalPhotoInput" accept="image/*" multiple style="display: none;">
+                                <div class="photo-btn-group">
+                                    <button type="button" class="btn-photo-camera" id="rentalCameraBtn">
+                                        <span>📷</span> 촬영
+                                    </button>
+                                    <button type="button" class="btn-photo-gallery" id="rentalGalleryBtn">
+                                        <span>🖼️</span> 갤러리
+                                    </button>
+                                </div>
+                                <input type="file" id="rentalCameraInput" accept="image/*" capture="environment" multiple style="display: none;">
+                                <input type="file" id="rentalGalleryInput" accept="image/*" multiple style="display: none;">
                                 <div id="rentalPhotoList" class="photo-list"></div>
                             </div>
                         </div>
@@ -195,10 +201,16 @@
                         <div class="form-group">
                             <label>회수 후 상태사진 (<span id="returnPhotoCount">0</span>/20)</label>
                             <div class="photo-capture-section">
-                                <label for="returnPhotoInput" class="btn-photo">
-                                    <span>📷</span> 사진 추가
-                                </label>
-                                <input type="file" id="returnPhotoInput" accept="image/*" multiple style="display: none;">
+                                <div class="photo-btn-group">
+                                    <button type="button" class="btn-photo-camera" id="returnCameraBtn">
+                                        <span>📷</span> 촬영
+                                    </button>
+                                    <button type="button" class="btn-photo-gallery" id="returnGalleryBtn">
+                                        <span>🖼️</span> 갤러리
+                                    </button>
+                                </div>
+                                <input type="file" id="returnCameraInput" accept="image/*" capture="environment" multiple style="display: none;">
+                                <input type="file" id="returnGalleryInput" accept="image/*" multiple style="display: none;">
                                 <div id="returnPhotoList" class="photo-list"></div>
                             </div>
                         </div>
@@ -409,7 +421,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=23"></script>
+    <script src="app.js?v=24"></script>
     <script>
         // Service Worker 등록 및 강제 업데이트
         if ('serviceWorker' in navigator) {

@@ -1463,6 +1463,49 @@ body {
     flex-direction: column;
     align-items: center;
     gap: 12px;
+    width: 100%;
+}
+
+.photo-btn-group {
+    display: flex;
+    gap: 12px;
+    width: 100%;
+    justify-content: center;
+}
+
+.btn-photo-camera,
+.btn-photo-gallery {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 20px;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex: 1;
+    max-width: 150px;
+    justify-content: center;
+}
+
+.btn-photo-camera {
+    background-color: var(--primary-color);
+    color: var(--white);
+}
+
+.btn-photo-camera:hover {
+    background-color: var(--primary-dark);
+}
+
+.btn-photo-gallery {
+    background-color: #10b981;
+    color: var(--white);
+}
+
+.btn-photo-gallery:hover {
+    background-color: #059669;
 }
 
 .btn-photo {
