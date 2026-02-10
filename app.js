@@ -537,23 +537,30 @@ function restartQRScanner() {
         html5QrCode.stop().then(() => {
             html5QrCode = null;
             isScanning = false;
-            setTimeout(() => {
-                initQRScanner();
-            }, 300);
+            clearQRReaderAndRestart();
         }).catch(() => {
             html5QrCode = null;
             isScanning = false;
-            setTimeout(() => {
-                initQRScanner();
-            }, 300);
+            clearQRReaderAndRestart();
         });
     } else {
         html5QrCode = null;
         isScanning = false;
-        setTimeout(() => {
-            initQRScanner();
-        }, 300);
+        clearQRReaderAndRestart();
     }
+}
+
+function clearQRReaderAndRestart() {
+    // QR 리더 DOM 요소 초기화
+    const qrReader = document.getElementById('qr-reader');
+    if (qrReader) {
+        qrReader.innerHTML = '';
+    }
+
+    // 약간의 지연 후 스캐너 시작
+    setTimeout(() => {
+        initQRScanner();
+    }, 500);
 }
 
 // ===== 스캔 액션 (임대/회수/상태변경) =====
