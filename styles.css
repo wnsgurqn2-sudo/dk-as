@@ -599,8 +599,10 @@ body {
     margin-bottom: 20px;
     box-shadow: var(--shadow-lg);
     border: 2px solid var(--primary-color);
-    max-height: 70vh;
+    max-height: 80vh;
     overflow-y: auto;
+    display: flex;
+    flex-direction: column;
 }
 
 .scanned-product-info {
@@ -676,6 +678,19 @@ body {
 .return-form,
 .status-form {
     margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+}
+
+.rental-form .btn-group,
+.return-form .btn-group,
+.status-form .btn-group {
+    position: sticky;
+    bottom: 0;
+    background-color: var(--white);
+    padding: 12px 0 0 0;
+    margin-top: 16px;
+    border-top: 1px solid var(--gray-200);
 }
 
 .used-time-info {
@@ -691,6 +706,16 @@ body {
     grid-template-columns: repeat(2, 1fr);
     gap: 8px;
     margin-bottom: 16px;
+}
+
+/* 회수/상태변경 폼 내 상태 버튼 고정 */
+.return-form .status-buttons,
+.status-form .status-buttons {
+    position: sticky;
+    bottom: 50px;
+    background-color: var(--white);
+    padding: 12px 0;
+    border-top: 1px solid var(--gray-200);
 }
 
 .status-btn {
