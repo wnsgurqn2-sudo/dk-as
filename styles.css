@@ -787,6 +787,36 @@ body {
     background-color: #ecfdf5;
 }
 
+/* 상태 버튼 선택 상태 */
+.status-btn.selected {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.5);
+}
+
+.status-btn.unchecked.selected {
+    background-color: var(--gray-200);
+}
+
+.status-btn.repair-wait.selected {
+    background-color: #fef2f2;
+}
+
+.status-btn.repair-done.selected {
+    background-color: #fff7ed;
+}
+
+.status-btn.clean-wait.selected {
+    background-color: #fffbeb;
+}
+
+.status-btn.clean-done.selected {
+    background-color: #f7fee7;
+}
+
+.status-btn.ready.selected {
+    background-color: #ecfdf5;
+}
+
 /* 6개 상태 버튼 그리드 */
 .status-buttons.status-6 {
     grid-template-columns: repeat(3, 1fr);

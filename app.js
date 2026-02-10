@@ -300,6 +300,11 @@ function hideScanActionPanel() {
     document.getElementById('returnNote').value = '';
     document.getElementById('usedTimeInfo').textContent = '';
 
+    // 상태 버튼 선택 초기화
+    document.querySelectorAll('#returnStatusButtons .status-btn').forEach(b => {
+        b.classList.remove('selected');
+    });
+
     currentScannedProduct = null;
 
     // QR 스캔 영역으로 스크롤
@@ -456,64 +461,81 @@ function initScanActions() {
             `<strong style="color: #dc2626;">실사용시간: ${usedHours}시간</strong> (${currentScannedProduct.rentalCompany})`;
     });
 
-    // 임대회수 상태 버튼 클릭
+    // 임대회수 상태 버튼 클릭 (선택만)
+    let selectedReturnStatus = null;
     document.querySelectorAll('#returnStatusButtons .status-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            const status = btn.dataset.status;
-            const newRemaining = parseInt(document.getElementById('returnHours').value) || 0;
-            const note = document.getElementById('returnNote').value.trim();
+            // 기존 선택 해제
+            document.querySelectorAll('#returnStatusButtons .status-btn').forEach(b => {
+                b.classList.remove('selected');
+            });
+            // 현재 버튼 선택
+            btn.classList.add('selected');
+            selectedReturnStatus = btn.dataset.status;
+        });
+    });
 
-            // 제품 업데이트
-            const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
-            if (productIndex !== -1) {
-                const previousRemaining = products[productIndex].remainingHours || products[productIndex].totalHours;
-                const usedHours = Math.abs(previousRemaining - newRemaining);
+    // 임대회수 저장 버튼
+    document.getElementById('btnReturnSave').addEventListener('click', () => {
+        if (!selectedReturnStatus) {
+            showToast('상태를 선택해주세요.', 'error');
+            return;
+        }
 
-                // 현재 임대 기록 업데이트
-                if (products[productIndex].rentalHistory && products[productIndex].currentRentalIndex !== undefined) {
-                    const currentRental = products[productIndex].rentalHistory[products[productIndex].currentRentalIndex];
-                    if (currentRental) {
-                        currentRental.returnDate = new Date().toISOString();
-                        currentRental.usedHours = usedHours;
-                        currentRental.remainingHoursAtReturn = newRemaining;
-                        currentRental.note = note;
-                        currentRental.returnPhotos = returnPhotos.length > 0 ? [...returnPhotos] : [];
-                    }
+        const newRemaining = parseInt(document.getElementById('returnHours').value) || 0;
+        const note = document.getElementById('returnNote').value.trim();
+
+        // 제품 업데이트
+        const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
+        if (productIndex !== -1) {
+            const previousRemaining = products[productIndex].remainingHours || products[productIndex].totalHours;
+            const usedHours = Math.abs(previousRemaining - newRemaining);
+
+            // 현재 임대 기록 업데이트
+            if (products[productIndex].rentalHistory && products[productIndex].currentRentalIndex !== undefined) {
+                const currentRental = products[productIndex].rentalHistory[products[productIndex].currentRentalIndex];
+                if (currentRental) {
+                    currentRental.returnDate = new Date().toISOString();
+                    currentRental.usedHours = usedHours;
+                    currentRental.remainingHoursAtReturn = newRemaining;
+                    currentRental.note = note;
+                    currentRental.returnPhotos = returnPhotos.length > 0 ? [...returnPhotos] : [];
                 }
-
-                const returnRecord = {
-                    type: '임대회수',
-                    productId: currentScannedProduct.id,
-                    productName: currentScannedProduct.name,
-                    company: products[productIndex].rentalCompany,
-                    usedHours: usedHours,
-                    previousRemaining: previousRemaining,
-                    newRemaining: newRemaining,
-                    note: note,
-                    status: status,
-                    time: new Date().toISOString()
-                };
-
-                products[productIndex].remainingHours = newRemaining;
-                products[productIndex].isRented = false;
-                products[productIndex].status = status;
-                products[productIndex].lastUpdated = new Date().toISOString();
-                products[productIndex].lastNote = note;
-                products[productIndex].lastCompany = products[productIndex].rentalCompany;
-                products[productIndex].lastUsedHours = usedHours;
-                products[productIndex].rentalCompany = null;
-                products[productIndex].rentalDate = null;
-                products[productIndex].currentRentalIndex = null;
-
-                saveData();
-                addHistory(returnRecord);
-
-                showToast(`${currentScannedProduct.name} 회수 완료 - 실사용: ${usedHours}h, ${status}`, 'success');
-                updateDashboard();
             }
 
-            hideScanActionPanel();
-        });
+            const returnRecord = {
+                type: '임대회수',
+                productId: currentScannedProduct.id,
+                productName: currentScannedProduct.name,
+                company: products[productIndex].rentalCompany,
+                usedHours: usedHours,
+                previousRemaining: previousRemaining,
+                newRemaining: newRemaining,
+                note: note,
+                status: selectedReturnStatus,
+                time: new Date().toISOString()
+            };
+
+            products[productIndex].remainingHours = newRemaining;
+            products[productIndex].isRented = false;
+            products[productIndex].status = selectedReturnStatus;
+            products[productIndex].lastUpdated = new Date().toISOString();
+            products[productIndex].lastNote = note;
+            products[productIndex].lastCompany = products[productIndex].rentalCompany;
+            products[productIndex].lastUsedHours = usedHours;
+            products[productIndex].rentalCompany = null;
+            products[productIndex].rentalDate = null;
+            products[productIndex].currentRentalIndex = null;
+
+            saveData();
+            addHistory(returnRecord);
+
+            showToast(`${currentScannedProduct.name} 회수 완료 - 실사용: ${usedHours}h, ${selectedReturnStatus}`, 'success');
+            updateDashboard();
+        }
+
+        selectedReturnStatus = null;
+        hideScanActionPanel();
     });
 
     // 상태변경 버튼 클릭
