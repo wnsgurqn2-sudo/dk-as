@@ -1,10 +1,11 @@
 // DK AS Service Worker
-const CACHE_NAME = 'dk-as-v19';
+const CACHE_NAME = 'dk-as-v23';
+const APP_VERSION = '23';
 const urlsToCache = [
   './',
   './index.html',
-  './styles.css',
-  './app.js',
+  './styles.css?v=' + APP_VERSION,
+  './app.js?v=' + APP_VERSION,
   './manifest.json',
   'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'
@@ -44,6 +45,26 @@ self.addEventListener('activate', (event) => {
 
 // 요청 가로채기 - 네트워크 우선, 실패 시 캐시
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+
+  // index.html, app.js는 항상 네트워크에서 가져오기 (캐시 무시)
+  if (url.pathname.endsWith('index.html') || url.pathname.endsWith('/') || url.pathname.endsWith('app.js')) {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-store' })
+        .then((response) => {
+          if (response.status === 200) {
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseClone);
+            });
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {

@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>DK AS - 임대제품 점검 시스템</title>
 
     <!-- PWA 설정 -->
@@ -16,7 +19,7 @@
     <link rel="icon" type="image/png" sizes="72x72" href="icons/icon-72x72.png">
     <link rel="apple-touch-icon" href="icons/icon-72x72.png">
 
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=23">
     <!-- QR Code 스캔 라이브러리 -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <!-- QR Code 생성 라이브러리 -->
@@ -406,18 +409,37 @@
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=23"></script>
     <script>
-        // Service Worker 등록
+        // Service Worker 등록 및 강제 업데이트
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./service-worker.js')
                     .then((registration) => {
                         console.log('Service Worker 등록 성공:', registration.scope);
+
+                        // 새 버전 확인 및 즉시 활성화
+                        registration.update();
+
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // 새 버전 설치됨 - 페이지 새로고침
+                                    console.log('새 버전 감지, 새로고침...');
+                                    window.location.reload();
+                                }
+                            });
+                        });
                     })
                     .catch((error) => {
                         console.log('Service Worker 등록 실패:', error);
                     });
+            });
+
+            // 컨트롤러 변경 시 새로고침
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                window.location.reload();
             });
         }
     </script>

@@ -229,13 +229,124 @@ function loadData() {
 
     if (savedProducts) {
         products = JSON.parse(savedProducts);
+    } else {
+        products = [];
     }
+
+    // 테스트용 기본 제품 추가 (없는 경우에만)
+    ensureDefaultTestProducts();
+
     if (savedHistory) {
         history = JSON.parse(savedHistory);
     }
     if (savedPhotos) {
         photos = JSON.parse(savedPhotos);
     }
+}
+
+// 테스트용 기본 제품이 없으면 추가
+function ensureDefaultTestProducts() {
+    const testProducts = getDefaultTestProducts();
+    let added = false;
+
+    testProducts.forEach(testProduct => {
+        // 해당 ID의 제품이 없으면 추가
+        if (!products.some(p => p.id === testProduct.id)) {
+            products.push(testProduct);
+            added = true;
+        }
+    });
+
+    if (added) {
+        saveData();
+    }
+}
+
+// 테스트용 기본 제품 데이터
+function getDefaultTestProducts() {
+    const now = new Date().toISOString();
+    return [
+        {
+            id: 'AM001',
+            name: '에어맨 13kva',
+            category: '발전기',
+            totalHours: 5000,
+            remainingHours: 4500,
+            note: '테스트용 제품',
+            status: '미점검',
+            isRented: false,
+            rentalCompany: null,
+            rentalDate: null,
+            rentalHistory: [],
+            repairHistory: [],
+            createdAt: now,
+            lastUpdated: now
+        },
+        {
+            id: 'AM002',
+            name: '에어맨 20kva',
+            category: '발전기',
+            totalHours: 5000,
+            remainingHours: 4200,
+            note: '테스트용 제품',
+            status: '미점검',
+            isRented: false,
+            rentalCompany: null,
+            rentalDate: null,
+            rentalHistory: [],
+            repairHistory: [],
+            createdAt: now,
+            lastUpdated: now
+        },
+        {
+            id: 'AM003',
+            name: '에어맨 25kva',
+            category: '발전기',
+            totalHours: 5000,
+            remainingHours: 3800,
+            note: '테스트용 제품',
+            status: '미점검',
+            isRented: false,
+            rentalCompany: null,
+            rentalDate: null,
+            rentalHistory: [],
+            repairHistory: [],
+            createdAt: now,
+            lastUpdated: now
+        },
+        {
+            id: 'AM004',
+            name: '에어맨 35kva',
+            category: '발전기',
+            totalHours: 5000,
+            remainingHours: 4000,
+            note: '테스트용 제품',
+            status: '미점검',
+            isRented: false,
+            rentalCompany: null,
+            rentalDate: null,
+            rentalHistory: [],
+            repairHistory: [],
+            createdAt: now,
+            lastUpdated: now
+        },
+        {
+            id: 'AM005',
+            name: '에어맨 45kva',
+            category: '발전기',
+            totalHours: 5000,
+            remainingHours: 4800,
+            note: '테스트용 제품',
+            status: '미점검',
+            isRented: false,
+            rentalCompany: null,
+            rentalDate: null,
+            rentalHistory: [],
+            repairHistory: [],
+            createdAt: now,
+            lastUpdated: now
+        }
+    ];
 }
 
 function saveData() {
