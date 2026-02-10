@@ -276,12 +276,13 @@ body {
 }
 
 .filter-btn {
-    padding: 8px 12px;
+    padding: 10px 16px;
     border: 1px solid var(--gray-300);
     border-radius: 20px;
     background-color: var(--white);
     color: var(--gray-700);
-    font-size: 12px;
+    font-size: 14px;
+    font-weight: 700;
     cursor: pointer;
     transition: all 0.2s;
     white-space: nowrap;

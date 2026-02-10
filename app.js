@@ -93,24 +93,40 @@ function initPhotoCapture() {
 }
 
 function handleMultiPhotoCapture(event, type) {
-    const file = event.target.files[0];
-    if (!file) return;
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
 
     const photos = type === 'rental' ? rentalPhotos : returnPhotos;
+    const remainingSlots = MAX_PHOTOS - photos.length;
 
-    if (photos.length >= MAX_PHOTOS) {
-        showToast(`최대 ${MAX_PHOTOS}장까지만 촬영 가능합니다.`, 'error');
+    if (remainingSlots <= 0) {
+        showToast(`최대 ${MAX_PHOTOS}장까지만 등록 가능합니다.`, 'error');
         event.target.value = '';
         return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        photos.push(e.target.result);
-        updatePhotoList(type);
-        event.target.value = ''; // 같은 파일 다시 선택 가능하도록
-    };
-    reader.readAsDataURL(file);
+    // 등록 가능한 개수만큼만 처리
+    const filesToProcess = Array.from(files).slice(0, remainingSlots);
+    let processedCount = 0;
+
+    filesToProcess.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            photos.push(e.target.result);
+            processedCount++;
+
+            // 모든 파일 처리 완료 시 UI 업데이트
+            if (processedCount === filesToProcess.length) {
+                updatePhotoList(type);
+                event.target.value = ''; // 같은 파일 다시 선택 가능하도록
+
+                if (files.length > remainingSlots) {
+                    showToast(`${filesToProcess.length}장 등록됨 (최대 ${MAX_PHOTOS}장)`, 'success');
+                }
+            }
+        };
+        reader.readAsDataURL(file);
+    });
 }
 
 function updatePhotoList(type) {
@@ -768,21 +784,47 @@ function updateProductList() {
         return;
     }
 
-    listDiv.innerHTML = products.map(product => `
-        <div class="product-item product-manage-item" data-id="${product.id}">
-            <span class="product-status-badge ${product.status}"></span>
-            <div class="product-info">
-                <div class="product-name">${product.name}</div>
-                <div class="product-id">${product.id} | ${product.remainingHours || product.totalHours}h</div>
+    listDiv.innerHTML = products.map(product => {
+        // 임대/회수 정보 생성
+        let infoHtml = '';
+        if (product.isRented) {
+            const rentalDate = product.rentalDate ?
+                new Date(product.rentalDate).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) : '';
+            infoHtml = `
+                <div class="rental-info-box">
+                    <span class="rental-label">임대중</span>
+                    <span class="rental-detail">${product.rentalCompany} | ${rentalDate}</span>
+                </div>
+            `;
+        } else {
+            const lastRentalRecord = product.rentalHistory && product.rentalHistory.length > 0 ?
+                product.rentalHistory[product.rentalHistory.length - 1] : null;
+            if (lastRentalRecord && lastRentalRecord.returnDate) {
+                const returnDate = new Date(lastRentalRecord.returnDate).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+                infoHtml = `
+                    <div class="return-info-box">
+                        <span class="return-label">최근회수</span>
+                        <span class="return-detail">${lastRentalRecord.company} | ${returnDate}</span>
+                    </div>
+                `;
+            }
+        }
+
+        return `
+            <div class="product-item product-manage-item" data-id="${product.id}">
+                <span class="product-status-badge ${product.isRented ? '임대중' : product.status}"></span>
+                <div class="product-info">
+                    <div class="product-name">${product.name}</div>
+                    <div class="product-id">${product.id} | ${product.category} | 잔여: ${product.remainingHours || product.totalHours}h</div>
+                    ${infoHtml}
+                </div>
+                ${product.isRented ? `<span class="rental-badge">임대중</span>` : `<span class="product-status ${product.status}">${product.status}</span>`}
+                <div class="product-actions">
+                    <button class="btn-icon danger delete-btn" data-id="${product.id}" title="삭제">🗑️</button>
+                </div>
             </div>
-            <span class="product-category">${product.category}</span>
-            ${product.isRented ? `<span class="rental-badge">임대중</span>` : ''}
-            <span class="product-status ${product.status}">${product.status}</span>
-            <div class="product-actions">
-                <button class="btn-icon danger delete-btn" data-id="${product.id}" title="삭제">🗑️</button>
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 
     // 제품 항목 클릭 이벤트 (삭제 버튼 제외)
     listDiv.querySelectorAll('.product-manage-item').forEach(item => {
