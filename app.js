@@ -295,10 +295,33 @@ function hideScanActionPanel() {
 
     currentScannedProduct = null;
 
-    // 스캐너 재시작
-    setTimeout(() => {
-        initQRScanner();
-    }, 500);
+    // 스캐너 재시작 - 상태 강제 초기화 후 재시작
+    restartQRScanner();
+}
+
+function restartQRScanner() {
+    // 기존 스캐너 정리
+    if (html5QrCode) {
+        html5QrCode.stop().then(() => {
+            html5QrCode = null;
+            isScanning = false;
+            setTimeout(() => {
+                initQRScanner();
+            }, 300);
+        }).catch(() => {
+            html5QrCode = null;
+            isScanning = false;
+            setTimeout(() => {
+                initQRScanner();
+            }, 300);
+        });
+    } else {
+        html5QrCode = null;
+        isScanning = false;
+        setTimeout(() => {
+            initQRScanner();
+        }, 300);
+    }
 }
 
 // ===== 스캔 액션 (임대/회수/상태변경) =====
