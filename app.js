@@ -287,13 +287,26 @@ function hideScanActionPanel() {
     document.getElementById('rentalForm').style.display = 'none';
     document.getElementById('returnForm').style.display = 'none';
     document.getElementById('statusForm').style.display = 'none';
+    document.getElementById('actionButtons').style.display = 'flex';
 
     // 사진 초기화
     document.getElementById('rentalPhotoInput').value = '';
     document.getElementById('returnPhotoInput').value = '';
     clearPhotos();
 
+    // 입력 필드 초기화
+    document.getElementById('rentalCompany').value = '';
+    document.getElementById('returnHours').value = '';
+    document.getElementById('returnNote').value = '';
+    document.getElementById('usedTimeInfo').textContent = '';
+
     currentScannedProduct = null;
+
+    // QR 스캔 영역으로 스크롤
+    const scannerContainer = document.querySelector('.scanner-container');
+    if (scannerContainer) {
+        scannerContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 
     // 스캐너 재시작 - 상태 강제 초기화 후 재시작
     restartQRScanner();
