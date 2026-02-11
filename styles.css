@@ -2068,177 +2068,309 @@ body {
     }
 }
 
-/* ===== 크게보기 모드 ===== */
+/* ===== 크게보기 모드 (30% 확대) ===== */
 body.large-view {
-    font-size: 18px;
-    line-height: 1.6;
+    font-size: 20px;
+    line-height: 1.7;
+}
+
+/* 헤더 */
+body.large-view .header {
+    padding: 24px;
 }
 
 body.large-view .header h1 {
-    font-size: 30px;
+    font-size: 32px;
 }
 
 body.large-view .header .subtitle {
-    font-size: 17px;
+    font-size: 18px;
 }
 
+body.large-view .header-settings-btn svg {
+    width: 28px;
+    height: 28px;
+}
+
+body.large-view .settings-label {
+    font-size: 16px;
+}
+
+body.large-view .view-btn {
+    font-size: 15px;
+    padding: 8px 18px;
+}
+
+/* 탭 네비게이션 */
 body.large-view .tab-btn {
-    padding: 14px 8px;
+    padding: 16px 8px;
 }
 
 body.large-view .tab-icon {
-    font-size: 22px;
+    font-size: 26px;
 }
 
 body.large-view .tab-text {
-    font-size: 14px;
-}
-
-body.large-view .stat-number {
-    font-size: 30px;
-}
-
-body.large-view .stat-label {
     font-size: 15px;
 }
 
-body.large-view .search-input {
+/* 통계 카드 - 4열로 변경 */
+body.large-view .stats-container.stats-10 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+body.large-view .stat-card {
+    padding: 14px 10px;
+}
+
+body.large-view .stat-number {
+    font-size: 32px;
+}
+
+body.large-view .stat-label {
     font-size: 16px;
-    padding: 12px 16px;
+}
+
+/* 검색 */
+body.large-view .search-input {
+    font-size: 18px;
+    padding: 14px 18px;
+}
+
+/* 진행률 */
+body.large-view .progress-header {
+    font-size: 18px;
+}
+
+body.large-view .progress-bar {
+    height: 12px;
+}
+
+/* 필터 버튼 */
+body.large-view .filter-section {
+    gap: 8px;
 }
 
 body.large-view .filter-btn {
-    font-size: 14px;
-    padding: 8px 14px;
+    font-size: 16px;
+    padding: 10px 16px;
+}
+
+/* 제품 목록 */
+body.large-view .product-item {
+    padding: 14px;
+    gap: 12px;
 }
 
 body.large-view .product-name {
-    font-size: 17px;
+    font-size: 19px;
 }
 
 body.large-view .product-id {
-    font-size: 14px;
+    font-size: 16px;
+}
+
+body.large-view .product-status-badge {
+    width: 12px;
+    height: 12px;
 }
 
 body.large-view .product-status {
-    font-size: 14px;
-    padding: 4px 10px;
+    font-size: 15px;
+    padding: 5px 12px;
 }
 
 body.large-view .rental-badge,
 body.large-view .reserved-badge {
-    font-size: 14px;
-    padding: 4px 12px;
+    font-size: 15px;
+    padding: 5px 14px;
 }
 
 body.large-view .rental-info-box,
 body.large-view .reserved-info-box,
 body.large-view .return-info-box {
-    font-size: 13px;
-    padding: 6px 10px;
+    font-size: 15px;
+    padding: 6px 12px;
+}
+
+body.large-view .product-actions .btn-icon {
+    font-size: 20px;
+    width: 36px;
+    height: 36px;
+}
+
+/* 섹션 제목 */
+body.large-view h2 {
+    font-size: 26px;
+    margin-bottom: 16px;
+}
+
+/* 스캔 탭 */
+body.large-view .scan-instruction {
+    font-size: 18px;
+}
+
+body.large-view .serial-search-label {
+    font-size: 16px;
+}
+
+body.large-view .serial-input {
+    font-size: 18px;
+    padding: 12px 14px;
+}
+
+body.large-view .btn-serial-search {
+    font-size: 18px;
+    padding: 12px 20px;
+}
+
+body.large-view .scanned-product-info h3 {
+    font-size: 26px;
+}
+
+body.large-view .scanned-product-info p {
+    font-size: 18px;
+}
+
+/* 액션 버튼 - 세로 배치 */
+body.large-view .action-buttons {
+    flex-direction: column;
+    gap: 10px;
 }
 
 body.large-view .btn-action {
-    font-size: 16px;
-    padding: 14px 12px;
+    font-size: 20px;
+    padding: 18px 16px;
 }
 
+/* 상태 버튼 - 2열 유지, 크기 확대 */
+body.large-view .status-buttons {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+body.large-view .status-btn {
+    font-size: 18px;
+    padding: 14px 10px;
+}
+
+/* 폼 요소 */
 body.large-view .form-group label {
-    font-size: 15px;
+    font-size: 18px;
+    margin-bottom: 8px;
 }
 
 body.large-view .form-group input,
 body.large-view .form-group select,
 body.large-view .form-group textarea {
-    font-size: 16px;
-    padding: 12px;
+    font-size: 18px;
+    padding: 14px;
 }
 
 body.large-view .btn-primary,
 body.large-view .btn-secondary {
+    font-size: 18px;
+    padding: 14px 24px;
+}
+
+body.large-view .btn-group {
+    gap: 10px;
+}
+
+/* 사진 버튼 */
+body.large-view .btn-photo-camera,
+body.large-view .btn-photo-gallery {
+    font-size: 16px;
+    padding: 12px 16px;
+}
+
+/* 모달 */
+body.large-view .modal {
+    max-width: 480px;
+}
+
+body.large-view .modal-header h3 {
+    font-size: 24px;
+}
+
+body.large-view .modal-header {
+    padding: 20px;
+}
+
+body.large-view .modal-body {
+    font-size: 18px;
+    padding: 24px 20px;
+}
+
+body.large-view .modal-footer {
+    padding: 20px;
+}
+
+body.large-view .modal-footer button {
+    font-size: 18px;
+    padding: 14px;
+}
+
+body.large-view .modal-close {
+    font-size: 30px;
+    width: 40px;
+    height: 40px;
+}
+
+/* 편집 모달 */
+body.large-view .edit-product-info {
+    padding: 16px 20px;
+}
+
+body.large-view .edit-product-info h4 {
+    font-size: 24px;
+}
+
+body.large-view .edit-product-info p {
+    font-size: 18px;
+}
+
+body.large-view .qr-serial-number {
+    font-size: 17px;
+}
+
+body.large-view .qr-btn-group {
+    gap: 10px;
+}
+
+body.large-view .qr-btn-group button {
     font-size: 16px;
     padding: 12px 20px;
 }
 
-body.large-view .status-btn {
-    font-size: 15px;
-    padding: 10px 8px;
-}
-
-body.large-view .scan-instruction {
-    font-size: 16px;
-}
-
-body.large-view .serial-search-label {
-    font-size: 14px;
-}
-
-body.large-view .serial-input {
-    font-size: 16px;
-}
-
-body.large-view .btn-serial-search {
-    font-size: 16px;
-}
-
-body.large-view .scanned-product-info h3 {
-    font-size: 22px;
-}
-
-body.large-view .scanned-product-info p {
-    font-size: 15px;
-}
-
-body.large-view .modal-header h3 {
-    font-size: 20px;
-}
-
-body.large-view .modal-body {
-    font-size: 16px;
-}
-
-body.large-view .modal-footer button {
-    font-size: 16px;
-}
-
+/* 토스트 */
 body.large-view .toast {
-    font-size: 15px;
+    font-size: 18px;
+    padding: 14px 24px;
 }
 
+/* 기록 */
 body.large-view .history-item {
-    font-size: 14px;
+    font-size: 16px;
+    padding: 12px;
 }
 
-body.large-view .progress-header {
-    font-size: 15px;
+/* 제품 등록 폼 */
+body.large-view .empty-state {
+    font-size: 18px;
 }
 
-body.large-view h2 {
-    font-size: 22px;
+body.large-view .used-time-info {
+    font-size: 16px;
 }
 
-body.large-view .edit-product-info h4 {
-    font-size: 20px;
+/* 임대/수리 기록 모달 */
+body.large-view .rental-history-item,
+body.large-view .repair-history-item {
+    font-size: 16px;
 }
 
-body.large-view .edit-product-info p {
-    font-size: 15px;
-}
-
-body.large-view .qr-serial-number {
-    font-size: 15px;
-}
-
-body.large-view .qr-btn-group button {
-    font-size: 14px;
-    padding: 10px 18px;
-}
-
-body.large-view .settings-label {
-    font-size: 15px;
-}
-
-body.large-view .view-btn {
-    font-size: 14px;
-    padding: 8px 16px;
+body.large-view .rental-history-delete-btn {
+    font-size: 16px;
+    padding: 8px 18px;
 }
