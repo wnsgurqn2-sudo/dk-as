@@ -1598,23 +1598,55 @@ function initEditProductModal() {
         }
     });
 
-    // QR 다운로드 버튼
+    // QR 다운로드 버튼 (시리얼넘버 포함)
     downloadBtn.addEventListener('click', () => {
         if (!currentEditProduct) return;
 
         const qrContainer = document.getElementById('editQrCode');
-        const img = qrContainer.querySelector('img');
-        const canvas = qrContainer.querySelector('canvas');
+        const qrCanvas = qrContainer.querySelector('canvas');
+        const qrImg = qrContainer.querySelector('img');
+        const sn = currentEditProduct.serialNumber || '';
+
+        // QR 이미지 소스 확보
+        let qrSource = null;
+        if (qrCanvas) {
+            qrSource = qrCanvas;
+        } else if (qrImg) {
+            qrSource = qrImg;
+        }
+
+        if (!qrSource) return;
+
+        // 시리얼넘버 포함 캔버스 생성
+        const padding = 20;
+        const snHeight = 30;
+        const qrSize = 120;
+        const totalWidth = qrSize + padding * 2;
+        const totalHeight = qrSize + padding * 2 + snHeight;
+
+        const dlCanvas = document.createElement('canvas');
+        dlCanvas.width = totalWidth;
+        dlCanvas.height = totalHeight;
+        const ctx = dlCanvas.getContext('2d');
+
+        // 흰색 배경
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, totalWidth, totalHeight);
+
+        // QR 코드 그리기
+        ctx.drawImage(qrSource, padding, padding, qrSize, qrSize);
+
+        // 시리얼넘버 텍스트
+        if (sn) {
+            ctx.fillStyle = '#374151';
+            ctx.font = 'bold 12px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(sn, totalWidth / 2, qrSize + padding + snHeight - 6);
+        }
 
         const link = document.createElement('a');
         link.download = `QR_${currentEditProduct.id}.png`;
-
-        if (canvas) {
-            link.href = canvas.toDataURL('image/png');
-        } else if (img) {
-            link.href = img.src;
-        }
-
+        link.href = dlCanvas.toDataURL('image/png');
         link.click();
         showToast('QR코드가 다운로드되었습니다.', 'success');
     });
