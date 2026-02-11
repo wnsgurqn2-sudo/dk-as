@@ -1,6 +1,6 @@
 // DK AS Service Worker
-const CACHE_NAME = 'dk-as-v28';
-const APP_VERSION = '28';
+const CACHE_NAME = 'dk-as-v29';
+const APP_VERSION = '29';
 const urlsToCache = [
   './',
   './index.html',

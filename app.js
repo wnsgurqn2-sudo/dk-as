@@ -382,8 +382,13 @@ function getDefaultTestProducts() {
 }
 
 function saveData() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    } catch (e) {
+        console.error('데이터 저장 오류:', e);
+        showToast('저장 공간이 부족합니다. 사진 수를 줄여주세요.', 'error');
+    }
 }
 
 function savePhotos() {
@@ -659,43 +664,48 @@ function initScanActions() {
             return;
         }
 
-        // 제품 임대 처리
-        const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
-        if (productIndex !== -1) {
-            const rentalRecord = {
-                type: '임대',
-                company: company,
-                rentalDate: new Date().toISOString(),
-                remainingHoursAtRental: products[productIndex].remainingHours || products[productIndex].totalHours,
-                photos: rentalPhotos.length > 0 ? [...rentalPhotos] : []
-            };
+        try {
+            // 제품 임대 처리
+            const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
+            if (productIndex !== -1) {
+                const rentalRecord = {
+                    type: '임대',
+                    company: company,
+                    rentalDate: new Date().toISOString(),
+                    remainingHoursAtRental: products[productIndex].remainingHours || products[productIndex].totalHours,
+                    photos: rentalPhotos.length > 0 ? [...rentalPhotos] : []
+                };
 
-            // 임대기록 배열 초기화 및 추가
-            if (!products[productIndex].rentalHistory) {
-                products[productIndex].rentalHistory = [];
+                // 임대기록 배열 초기화 및 추가
+                if (!products[productIndex].rentalHistory) {
+                    products[productIndex].rentalHistory = [];
+                }
+                products[productIndex].rentalHistory.push(rentalRecord);
+
+                products[productIndex].isRented = true;
+                products[productIndex].rentalCompany = company;
+                products[productIndex].rentalDate = new Date().toISOString();
+                products[productIndex].currentRentalIndex = products[productIndex].rentalHistory.length - 1;
+                saveData();
+
+                // 기록 추가
+                addHistory({
+                    type: '임대',
+                    productId: currentScannedProduct.id,
+                    productName: currentScannedProduct.name,
+                    company: company,
+                    time: new Date().toISOString()
+                });
+
+                showToast(`${currentScannedProduct.name} - ${company} 임대 완료`, 'success');
+                updateDashboard();
             }
-            products[productIndex].rentalHistory.push(rentalRecord);
-
-            products[productIndex].isRented = true;
-            products[productIndex].rentalCompany = company;
-            products[productIndex].rentalDate = new Date().toISOString();
-            products[productIndex].currentRentalIndex = products[productIndex].rentalHistory.length - 1;
-            saveData();
-
-            // 기록 추가
-            addHistory({
-                type: '임대',
-                productId: currentScannedProduct.id,
-                productName: currentScannedProduct.name,
-                company: company,
-                time: new Date().toISOString()
-            });
-
-            showToast(`${currentScannedProduct.name} - ${company} 임대 완료`, 'success');
-            updateDashboard();
+        } catch (e) {
+            console.error('임대 저장 오류:', e);
+            showToast('저장 중 오류가 발생했습니다.', 'error');
+        } finally {
+            hideScanActionPanel();
         }
-
-        hideScanActionPanel();
     });
 
     // 임대회수 취소
@@ -746,60 +756,65 @@ function initScanActions() {
             return;
         }
 
-        const newRemaining = parseInt(document.getElementById('returnHours').value) || 0;
-        const note = document.getElementById('returnNote').value.trim();
+        try {
+            const newRemaining = parseInt(document.getElementById('returnHours').value) || 0;
+            const note = document.getElementById('returnNote').value.trim();
 
-        // 제품 업데이트
-        const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
-        if (productIndex !== -1) {
-            const previousRemaining = products[productIndex].remainingHours || products[productIndex].totalHours;
-            const usedHours = Math.abs(previousRemaining - newRemaining);
+            // 제품 업데이트
+            const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
+            if (productIndex !== -1) {
+                const previousRemaining = products[productIndex].remainingHours || products[productIndex].totalHours;
+                const usedHours = Math.abs(previousRemaining - newRemaining);
 
-            // 현재 임대 기록 업데이트
-            if (products[productIndex].rentalHistory && products[productIndex].currentRentalIndex !== undefined) {
-                const currentRental = products[productIndex].rentalHistory[products[productIndex].currentRentalIndex];
-                if (currentRental) {
-                    currentRental.returnDate = new Date().toISOString();
-                    currentRental.usedHours = usedHours;
-                    currentRental.remainingHoursAtReturn = newRemaining;
-                    currentRental.note = note;
-                    currentRental.returnPhotos = returnPhotos.length > 0 ? [...returnPhotos] : [];
+                // 현재 임대 기록 업데이트
+                if (products[productIndex].rentalHistory && products[productIndex].currentRentalIndex !== undefined) {
+                    const currentRental = products[productIndex].rentalHistory[products[productIndex].currentRentalIndex];
+                    if (currentRental) {
+                        currentRental.returnDate = new Date().toISOString();
+                        currentRental.usedHours = usedHours;
+                        currentRental.remainingHoursAtReturn = newRemaining;
+                        currentRental.note = note;
+                        currentRental.returnPhotos = returnPhotos.length > 0 ? [...returnPhotos] : [];
+                    }
                 }
+
+                const returnRecord = {
+                    type: '임대회수',
+                    productId: currentScannedProduct.id,
+                    productName: currentScannedProduct.name,
+                    company: products[productIndex].rentalCompany,
+                    usedHours: usedHours,
+                    previousRemaining: previousRemaining,
+                    newRemaining: newRemaining,
+                    note: note,
+                    status: selectedReturnStatus,
+                    time: new Date().toISOString()
+                };
+
+                products[productIndex].remainingHours = newRemaining;
+                products[productIndex].isRented = false;
+                products[productIndex].status = selectedReturnStatus;
+                products[productIndex].lastUpdated = new Date().toISOString();
+                products[productIndex].lastNote = note;
+                products[productIndex].lastCompany = products[productIndex].rentalCompany;
+                products[productIndex].lastUsedHours = usedHours;
+                products[productIndex].rentalCompany = null;
+                products[productIndex].rentalDate = null;
+                products[productIndex].currentRentalIndex = null;
+
+                saveData();
+                addHistory(returnRecord);
+
+                showToast(`${currentScannedProduct.name} 회수 완료 - 실사용: ${usedHours}h, ${selectedReturnStatus}`, 'success');
+                updateDashboard();
             }
-
-            const returnRecord = {
-                type: '임대회수',
-                productId: currentScannedProduct.id,
-                productName: currentScannedProduct.name,
-                company: products[productIndex].rentalCompany,
-                usedHours: usedHours,
-                previousRemaining: previousRemaining,
-                newRemaining: newRemaining,
-                note: note,
-                status: selectedReturnStatus,
-                time: new Date().toISOString()
-            };
-
-            products[productIndex].remainingHours = newRemaining;
-            products[productIndex].isRented = false;
-            products[productIndex].status = selectedReturnStatus;
-            products[productIndex].lastUpdated = new Date().toISOString();
-            products[productIndex].lastNote = note;
-            products[productIndex].lastCompany = products[productIndex].rentalCompany;
-            products[productIndex].lastUsedHours = usedHours;
-            products[productIndex].rentalCompany = null;
-            products[productIndex].rentalDate = null;
-            products[productIndex].currentRentalIndex = null;
-
-            saveData();
-            addHistory(returnRecord);
-
-            showToast(`${currentScannedProduct.name} 회수 완료 - 실사용: ${usedHours}h, ${selectedReturnStatus}`, 'success');
-            updateDashboard();
+        } catch (e) {
+            console.error('회수 저장 오류:', e);
+            showToast('저장 중 오류가 발생했습니다.', 'error');
+        } finally {
+            selectedReturnStatus = null;
+            hideScanActionPanel();
         }
-
-        selectedReturnStatus = null;
-        hideScanActionPanel();
     });
 
     // 상태변경 버튼 클릭 (선택만)
@@ -827,53 +842,58 @@ function initScanActions() {
             return;
         }
 
-        const note = document.getElementById('statusNote').value.trim();
+        try {
+            const note = document.getElementById('statusNote').value.trim();
 
-        const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
-        if (productIndex !== -1) {
-            const previousStatus = products[productIndex].status;
+            const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
+            if (productIndex !== -1) {
+                const previousStatus = products[productIndex].status;
 
-            // 수리기록 처리
-            if (!products[productIndex].repairHistory) {
-                products[productIndex].repairHistory = [];
-            }
-            if (selectedChangeStatus === '수리중' && previousStatus !== '수리중') {
-                products[productIndex].repairHistory.push({
-                    startDate: new Date().toISOString(),
-                    endDate: null,
-                    note: note
-                });
-            }
-            if (previousStatus === '수리중' && selectedChangeStatus !== '수리중') {
-                const lastRepair = products[productIndex].repairHistory[products[productIndex].repairHistory.length - 1];
-                if (lastRepair && !lastRepair.endDate) {
-                    lastRepair.endDate = new Date().toISOString();
-                    lastRepair.endNote = note;
+                // 수리기록 처리
+                if (!products[productIndex].repairHistory) {
+                    products[productIndex].repairHistory = [];
                 }
+                if (selectedChangeStatus === '수리중' && previousStatus !== '수리중') {
+                    products[productIndex].repairHistory.push({
+                        startDate: new Date().toISOString(),
+                        endDate: null,
+                        note: note
+                    });
+                }
+                if (previousStatus === '수리중' && selectedChangeStatus !== '수리중') {
+                    const lastRepair = products[productIndex].repairHistory[products[productIndex].repairHistory.length - 1];
+                    if (lastRepair && !lastRepair.endDate) {
+                        lastRepair.endDate = new Date().toISOString();
+                        lastRepair.endNote = note;
+                    }
+                }
+
+                products[productIndex].status = selectedChangeStatus;
+                products[productIndex].lastUpdated = new Date().toISOString();
+                products[productIndex].lastNote = note;
+
+                saveData();
+
+                addHistory({
+                    type: '상태변경',
+                    productId: currentScannedProduct.id,
+                    productName: currentScannedProduct.name,
+                    previousStatus: previousStatus,
+                    newStatus: selectedChangeStatus,
+                    note: note,
+                    time: new Date().toISOString()
+                });
+
+                showToast(`${currentScannedProduct.name} 상태 변경: ${selectedChangeStatus}`, 'success');
+                updateDashboard();
             }
-
-            products[productIndex].status = selectedChangeStatus;
-            products[productIndex].lastUpdated = new Date().toISOString();
-            products[productIndex].lastNote = note;
-
-            saveData();
-
-            addHistory({
-                type: '상태변경',
-                productId: currentScannedProduct.id,
-                productName: currentScannedProduct.name,
-                previousStatus: previousStatus,
-                newStatus: selectedChangeStatus,
-                note: note,
-                time: new Date().toISOString()
-            });
-
-            showToast(`${currentScannedProduct.name} 상태 변경: ${selectedChangeStatus}`, 'success');
-            updateDashboard();
+        } catch (e) {
+            console.error('상태변경 저장 오류:', e);
+            showToast('저장 중 오류가 발생했습니다.', 'error');
+        } finally {
+            selectedChangeStatus = null;
+            hideScanActionPanel();
         }
-
-        selectedChangeStatus = null;
-        hideScanActionPanel();
     });
 }
 
