@@ -2458,6 +2458,52 @@ body.large-view .rental-history-delete-btn {
     margin-top: 8px;
 }
 
+.login-divider {
+    display: flex;
+    align-items: center;
+    margin: 16px 0;
+    color: var(--gray-400);
+    font-size: 13px;
+}
+.login-divider::before,
+.login-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--gray-200);
+}
+.login-divider span {
+    padding: 0 12px;
+}
+
+.btn-google-login {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #333;
+    background: #fff;
+    border: 1.5px solid var(--gray-200);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+.btn-google-login:active {
+    background: var(--gray-50);
+    border-color: var(--gray-300);
+}
+.btn-google-login:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+.btn-google-login svg {
+    flex-shrink: 0;
+}
+
 .login-switch {
     text-align: center;
     margin-top: 16px;
@@ -2577,6 +2623,11 @@ body.large-view .register-form .form-group input {
 body.large-view .login-btn {
     font-size: 20px;
     padding: 16px;
+}
+
+body.large-view .btn-google-login {
+    font-size: 18px;
+    padding: 14px;
 }
 
 body.large-view .login-switch {

@@ -120,33 +120,23 @@ function initAuth() {
                 const userDoc = await db.collection('users').doc(user.uid).get();
                 if (userDoc.exists) {
                     currentUserProfile = userDoc.data();
+                    isAdmin = user.email === ADMIN_EMAIL;
+                    hideLoginScreen();
+                    updateHeaderUserInfo();
+                    if (isAdmin) {
+                        document.getElementById('adminHistoryTab').style.display = '';
+                    }
+                    await loadData();
+                    updateDashboard();
+                    updateProductList();
+                    updateQRProductSelect();
+                    updateQRSheetProductList();
+                    updateNextProductId();
+                    updateAutoCompleteSuggestions();
                 } else {
-                    currentUserProfile = {
-                        email: user.email,
-                        name: user.email.split('@')[0],
-                        department: '미지정'
-                    };
-                    await db.collection('users').doc(user.uid).set({
-                        ...currentUserProfile,
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
+                    // 프로필 미등록 (Google 로그인 최초 등) → 프로필 완성 폼 표시
+                    showProfileCompleteForm();
                 }
-                isAdmin = user.email === ADMIN_EMAIL;
-
-                hideLoginScreen();
-                updateHeaderUserInfo();
-
-                if (isAdmin) {
-                    document.getElementById('adminHistoryTab').style.display = '';
-                }
-
-                await loadData();
-                updateDashboard();
-                updateProductList();
-                updateQRProductSelect();
-                updateQRSheetProductList();
-                updateNextProductId();
-                updateAutoCompleteSuggestions();
             } catch (e) {
                 console.error('사용자 프로필 로드 오류:', e);
                 showToast('사용자 정보를 불러오는 중 오류가 발생했습니다.', 'error');
@@ -167,10 +157,19 @@ function initAuth() {
         if (e.key === 'Enter') loginUser();
     });
 
+    // Google 로그인 버튼
+    document.getElementById('googleLoginBtn').addEventListener('click', googleSignIn);
+
     // 회원가입 버튼
     document.getElementById('registerBtn').addEventListener('click', registerUser);
     document.getElementById('regDepartment').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') registerUser();
+    });
+
+    // 프로필 완성 버튼
+    document.getElementById('profileCompleteBtn').addEventListener('click', completeProfile);
+    document.getElementById('profileDepartment').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') completeProfile();
     });
 
     // 로그인/회원가입 전환
@@ -184,6 +183,74 @@ function initAuth() {
         document.getElementById('registerForm').style.display = 'none';
         document.getElementById('loginForm').style.display = 'block';
     });
+}
+
+// Google 로그인
+async function googleSignIn() {
+    const btn = document.getElementById('googleLoginBtn');
+    try {
+        btn.disabled = true;
+        const provider = new firebase.auth.GoogleAuthProvider();
+        await authInstance.signInWithPopup(provider);
+    } catch (e) {
+        if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
+            showToast('Google 로그인 실패: ' + e.message, 'error');
+        }
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+// 프로필 완성 폼 표시
+function showProfileCompleteForm() {
+    const overlay = document.getElementById('loginOverlay');
+    overlay.style.display = 'flex';
+    document.getElementById('loginForm').style.display = 'none';
+    document.getElementById('registerForm').style.display = 'none';
+    document.getElementById('profileCompleteForm').style.display = 'block';
+    // Google 계정에서 이름 가져오기
+    if (currentUser && currentUser.displayName) {
+        document.getElementById('profileName').value = currentUser.displayName;
+    }
+}
+
+// 프로필 완성 처리
+async function completeProfile() {
+    const name = document.getElementById('profileName').value.trim();
+    const department = document.getElementById('profileDepartment').value.trim();
+    if (!name || !department) {
+        showToast('이름과 부서를 입력해주세요.', 'error');
+        return;
+    }
+    const btn = document.getElementById('profileCompleteBtn');
+    try {
+        btn.disabled = true;
+        btn.textContent = '저장 중...';
+        currentUserProfile = { email: currentUser.email, name, department };
+        await db.collection('users').doc(currentUser.uid).set({
+            ...currentUserProfile,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        isAdmin = currentUser.email === ADMIN_EMAIL;
+        hideLoginScreen();
+        updateHeaderUserInfo();
+        if (isAdmin) {
+            document.getElementById('adminHistoryTab').style.display = '';
+        }
+        await loadData();
+        updateDashboard();
+        updateProductList();
+        updateQRProductSelect();
+        updateQRSheetProductList();
+        updateNextProductId();
+        updateAutoCompleteSuggestions();
+        showToast('프로필이 등록되었습니다.', 'success');
+    } catch (e) {
+        showToast('프로필 저장 실패: ' + e.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '완료';
+    }
 }
 
 async function loginUser() {
@@ -257,10 +324,14 @@ function logoutUser() {
 
 function showLoginScreen() {
     document.getElementById('loginOverlay').style.display = 'flex';
+    document.getElementById('loginForm').style.display = 'block';
+    document.getElementById('registerForm').style.display = 'none';
+    document.getElementById('profileCompleteForm').style.display = 'none';
 }
 
 function hideLoginScreen() {
     document.getElementById('loginOverlay').style.display = 'none';
+    document.getElementById('profileCompleteForm').style.display = 'none';
 }
 
 function updateHeaderUserInfo() {
