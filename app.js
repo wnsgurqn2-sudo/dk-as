@@ -497,58 +497,83 @@ function showScanActionPanel(product) {
 }
 
 function hideScanActionPanel() {
-    document.getElementById('scanActionPanel').style.display = 'none';
-    document.getElementById('rentalForm').style.display = 'none';
-    document.getElementById('returnForm').style.display = 'none';
-    document.getElementById('statusForm').style.display = 'none';
-    document.getElementById('actionButtons').style.display = 'flex';
+    try {
+        // 패널 및 폼 숨기기 (최우선 실행)
+        document.getElementById('scanActionPanel').style.display = 'none';
+        document.getElementById('rentalForm').style.display = 'none';
+        document.getElementById('returnForm').style.display = 'none';
+        document.getElementById('statusForm').style.display = 'none';
+        document.getElementById('actionButtons').style.display = 'flex';
+    } catch (e) {
+        console.error('패널 숨기기 오류:', e);
+    }
 
-    // 사진 초기화
-    document.getElementById('rentalCameraInput').value = '';
-    document.getElementById('rentalGalleryInput').value = '';
-    document.getElementById('returnCameraInput').value = '';
-    document.getElementById('returnGalleryInput').value = '';
-    clearPhotos();
+    try {
+        // 사진 초기화
+        document.getElementById('rentalCameraInput').value = '';
+        document.getElementById('rentalGalleryInput').value = '';
+        document.getElementById('returnCameraInput').value = '';
+        document.getElementById('returnGalleryInput').value = '';
+        clearPhotos();
 
-    // 입력 필드 초기화
-    document.getElementById('rentalCompany').value = '';
-    document.getElementById('returnHours').value = '';
-    document.getElementById('returnNote').value = '';
-    document.getElementById('usedTimeInfo').textContent = '';
+        // 입력 필드 초기화
+        document.getElementById('rentalCompany').value = '';
+        document.getElementById('returnHours').value = '';
+        document.getElementById('returnNote').value = '';
+        document.getElementById('statusNote').value = '';
+        document.getElementById('usedTimeInfo').textContent = '';
 
-    // 상태 버튼 선택 초기화
-    document.querySelectorAll('#returnStatusButtons .status-btn').forEach(b => {
-        b.classList.remove('selected');
-    });
-    document.querySelectorAll('#statusChangeButtons .status-btn').forEach(b => {
-        b.classList.remove('selected');
-    });
+        // 상태 버튼 선택 초기화
+        document.querySelectorAll('#returnStatusButtons .status-btn').forEach(b => {
+            b.classList.remove('selected');
+        });
+        document.querySelectorAll('#statusChangeButtons .status-btn').forEach(b => {
+            b.classList.remove('selected');
+        });
+    } catch (e) {
+        console.error('입력 초기화 오류:', e);
+    }
 
     currentScannedProduct = null;
 
     // QR 스캔 영역으로 스크롤
-    const scannerContainer = document.querySelector('.scanner-container');
-    if (scannerContainer) {
-        scannerContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    try {
+        const scannerContainer = document.querySelector('.scanner-container');
+        if (scannerContainer) {
+            scannerContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    } catch (e) {
+        console.error('스크롤 오류:', e);
     }
 
     // 스캐너 재시작 - 상태 강제 초기화 후 재시작
-    restartQRScanner();
+    try {
+        restartQRScanner();
+    } catch (e) {
+        console.error('스캐너 재시작 오류:', e);
+    }
 }
 
 function restartQRScanner() {
-    // 기존 스캐너 정리
-    if (html5QrCode) {
-        html5QrCode.stop().then(() => {
+    try {
+        // 기존 스캐너 정리
+        if (html5QrCode) {
+            html5QrCode.stop().then(() => {
+                html5QrCode = null;
+                isScanning = false;
+                clearQRReaderAndRestart();
+            }).catch(() => {
+                html5QrCode = null;
+                isScanning = false;
+                clearQRReaderAndRestart();
+            });
+        } else {
             html5QrCode = null;
             isScanning = false;
             clearQRReaderAndRestart();
-        }).catch(() => {
-            html5QrCode = null;
-            isScanning = false;
-            clearQRReaderAndRestart();
-        });
-    } else {
+        }
+    } catch (e) {
+        console.error('스캐너 재시작 오류:', e);
         html5QrCode = null;
         isScanning = false;
         clearQRReaderAndRestart();
@@ -624,6 +649,12 @@ function initScanActions() {
 
         if (!company) {
             showToast('업체명을 입력해주세요.', 'error');
+            return;
+        }
+
+        if (!currentScannedProduct) {
+            showToast('스캔된 제품이 없습니다.', 'error');
+            hideScanActionPanel();
             return;
         }
 
@@ -708,6 +739,12 @@ function initScanActions() {
             return;
         }
 
+        if (!currentScannedProduct) {
+            showToast('스캔된 제품이 없습니다.', 'error');
+            hideScanActionPanel();
+            return;
+        }
+
         const newRemaining = parseInt(document.getElementById('returnHours').value) || 0;
         const note = document.getElementById('returnNote').value.trim();
 
@@ -780,6 +817,12 @@ function initScanActions() {
     document.getElementById('btnStatusSave').addEventListener('click', () => {
         if (!selectedChangeStatus) {
             showToast('상태를 선택해주세요.', 'error');
+            return;
+        }
+
+        if (!currentScannedProduct) {
+            showToast('스캔된 제품이 없습니다.', 'error');
+            hideScanActionPanel();
             return;
         }
 
@@ -1649,11 +1692,15 @@ function showRentalDeleteBtn(item) {
 }
 
 function deleteRentalRecord(productId, index) {
+    // 임대기록 모달을 먼저 닫아서 확인 모달이 보이도록 처리
+    closeRentalHistoryModal();
+
     showModal('임대기록 삭제', '이 임대기록을 삭제하시겠습니까?', () => {
         const product = products.find(p => p.id === productId);
         if (product && product.rentalHistory && product.rentalHistory[index]) {
             product.rentalHistory.splice(index, 1);
             saveData();
+            // 삭제 후 임대기록 모달 다시 열기
             showRentalHistory(productId);
             updateDashboard();
             updateProductList();

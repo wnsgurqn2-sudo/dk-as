@@ -1,6 +1,6 @@
 // DK AS Service Worker
-const CACHE_NAME = 'dk-as-v26';
-const APP_VERSION = '26';
+const CACHE_NAME = 'dk-as-v27';
+const APP_VERSION = '27';
 const urlsToCache = [
   './',
   './index.html',
@@ -47,8 +47,8 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // index.html, app.js는 항상 네트워크에서 가져오기 (캐시 무시)
-  if (url.pathname.endsWith('index.html') || url.pathname.endsWith('/') || url.pathname.endsWith('app.js')) {
+  // index.html, app.js, styles.css는 항상 네트워크에서 가져오기 (캐시 무시)
+  if (url.pathname.endsWith('index.html') || url.pathname.endsWith('/') || url.pathname.endsWith('app.js') || url.pathname.endsWith('styles.css')) {
     event.respondWith(
       fetch(event.request, { cache: 'no-store' })
         .then((response) => {

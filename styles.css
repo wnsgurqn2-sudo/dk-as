@@ -1249,6 +1249,11 @@ body {
     padding: 20px;
 }
 
+/* 확인 모달은 다른 모달 위에 표시 */
+#modalOverlay {
+    z-index: 1500;
+}
+
 .modal-overlay.show {
     display: flex;
 }
