@@ -48,6 +48,17 @@ body {
     background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
     color: var(--white);
     padding: 20px;
+    position: relative;
+}
+
+.header-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.header-title {
     text-align: center;
 }
 
@@ -60,6 +71,78 @@ body {
 .header .subtitle {
     font-size: 14px;
     opacity: 0.9;
+}
+
+.header-settings-btn {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.85);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.header-settings-btn:active {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* 설정 드롭다운 */
+.settings-dropdown {
+    display: none;
+    margin-top: 12px;
+    padding: 12px;
+    background-color: rgba(255, 255, 255, 0.15);
+    border-radius: var(--radius);
+    backdrop-filter: blur(4px);
+}
+
+.settings-dropdown.show {
+    display: block;
+}
+
+.settings-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.settings-label {
+    font-size: 13px;
+    font-weight: 500;
+    opacity: 0.95;
+}
+
+.view-toggle {
+    display: flex;
+    gap: 4px;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    padding: 3px;
+}
+
+.view-btn {
+    padding: 6px 14px;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    background: none;
+    color: rgba(255, 255, 255, 0.7);
+    transition: all 0.2s;
+}
+
+.view-btn.active {
+    background-color: var(--white);
+    color: var(--primary-color);
 }
 
 /* ===== 탭 네비게이션 ===== */
@@ -1983,4 +2066,179 @@ body {
         break-inside: avoid;
         border: 1px solid #ccc;
     }
+}
+
+/* ===== 크게보기 모드 ===== */
+body.large-view {
+    font-size: 18px;
+    line-height: 1.6;
+}
+
+body.large-view .header h1 {
+    font-size: 30px;
+}
+
+body.large-view .header .subtitle {
+    font-size: 17px;
+}
+
+body.large-view .tab-btn {
+    padding: 14px 8px;
+}
+
+body.large-view .tab-icon {
+    font-size: 22px;
+}
+
+body.large-view .tab-text {
+    font-size: 14px;
+}
+
+body.large-view .stat-number {
+    font-size: 30px;
+}
+
+body.large-view .stat-label {
+    font-size: 15px;
+}
+
+body.large-view .search-input {
+    font-size: 16px;
+    padding: 12px 16px;
+}
+
+body.large-view .filter-btn {
+    font-size: 14px;
+    padding: 8px 14px;
+}
+
+body.large-view .product-name {
+    font-size: 17px;
+}
+
+body.large-view .product-id {
+    font-size: 14px;
+}
+
+body.large-view .product-status {
+    font-size: 14px;
+    padding: 4px 10px;
+}
+
+body.large-view .rental-badge,
+body.large-view .reserved-badge {
+    font-size: 14px;
+    padding: 4px 12px;
+}
+
+body.large-view .rental-info-box,
+body.large-view .reserved-info-box,
+body.large-view .return-info-box {
+    font-size: 13px;
+    padding: 6px 10px;
+}
+
+body.large-view .btn-action {
+    font-size: 16px;
+    padding: 14px 12px;
+}
+
+body.large-view .form-group label {
+    font-size: 15px;
+}
+
+body.large-view .form-group input,
+body.large-view .form-group select,
+body.large-view .form-group textarea {
+    font-size: 16px;
+    padding: 12px;
+}
+
+body.large-view .btn-primary,
+body.large-view .btn-secondary {
+    font-size: 16px;
+    padding: 12px 20px;
+}
+
+body.large-view .status-btn {
+    font-size: 15px;
+    padding: 10px 8px;
+}
+
+body.large-view .scan-instruction {
+    font-size: 16px;
+}
+
+body.large-view .serial-search-label {
+    font-size: 14px;
+}
+
+body.large-view .serial-input {
+    font-size: 16px;
+}
+
+body.large-view .btn-serial-search {
+    font-size: 16px;
+}
+
+body.large-view .scanned-product-info h3 {
+    font-size: 22px;
+}
+
+body.large-view .scanned-product-info p {
+    font-size: 15px;
+}
+
+body.large-view .modal-header h3 {
+    font-size: 20px;
+}
+
+body.large-view .modal-body {
+    font-size: 16px;
+}
+
+body.large-view .modal-footer button {
+    font-size: 16px;
+}
+
+body.large-view .toast {
+    font-size: 15px;
+}
+
+body.large-view .history-item {
+    font-size: 14px;
+}
+
+body.large-view .progress-header {
+    font-size: 15px;
+}
+
+body.large-view h2 {
+    font-size: 22px;
+}
+
+body.large-view .edit-product-info h4 {
+    font-size: 20px;
+}
+
+body.large-view .edit-product-info p {
+    font-size: 15px;
+}
+
+body.large-view .qr-serial-number {
+    font-size: 15px;
+}
+
+body.large-view .qr-btn-group button {
+    font-size: 14px;
+    padding: 10px 18px;
+}
+
+body.large-view .settings-label {
+    font-size: 15px;
+}
+
+body.large-view .view-btn {
+    font-size: 14px;
+    padding: 8px 16px;
 }

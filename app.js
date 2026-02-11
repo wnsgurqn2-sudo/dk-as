@@ -74,6 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initPhotoCapture();
     initDeleteAll();
     initScanActions();
+    initSettings();
     updateDashboard();
     updateProductList();
     updateQRProductSelect();
@@ -1192,6 +1193,50 @@ function initDeleteAll() {
                 showToast('모든 제품이 삭제되었습니다.', 'success');
             }
         );
+    });
+}
+
+// ===== 설정 (크게보기) =====
+function initSettings() {
+    const settingsBtn = document.getElementById('settingsBtn');
+    const dropdown = document.getElementById('settingsDropdown');
+    const normalBtn = document.getElementById('viewNormalBtn');
+    const largeBtn = document.getElementById('viewLargeBtn');
+
+    // 저장된 설정 복원
+    const savedView = localStorage.getItem('dk_as_view_mode');
+    if (savedView === 'large') {
+        document.body.classList.add('large-view');
+        normalBtn.classList.remove('active');
+        largeBtn.classList.add('active');
+    }
+
+    // 톱니 아이콘 클릭 - 드롭다운 토글
+    settingsBtn.addEventListener('click', () => {
+        dropdown.classList.toggle('show');
+    });
+
+    // 기본 버튼
+    normalBtn.addEventListener('click', () => {
+        document.body.classList.remove('large-view');
+        normalBtn.classList.add('active');
+        largeBtn.classList.remove('active');
+        localStorage.setItem('dk_as_view_mode', 'normal');
+    });
+
+    // 크게보기 버튼
+    largeBtn.addEventListener('click', () => {
+        document.body.classList.add('large-view');
+        largeBtn.classList.add('active');
+        normalBtn.classList.remove('active');
+        localStorage.setItem('dk_as_view_mode', 'large');
+    });
+
+    // 드롭다운 외부 클릭 시 닫기
+    document.addEventListener('click', (e) => {
+        if (!settingsBtn.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.classList.remove('show');
+        }
     });
 }
 
