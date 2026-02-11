@@ -19,7 +19,7 @@
     <link rel="icon" type="image/png" sizes="72x72" href="icons/icon-72x72.png">
     <link rel="apple-touch-icon" href="icons/icon-72x72.png">
 
-    <link rel="stylesheet" href="styles.css?v=25">
+    <link rel="stylesheet" href="styles.css?v=26">
     <!-- QR Code 스캔 라이브러리 -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <!-- QR Code 생성 라이브러리 -->
@@ -242,17 +242,21 @@
                             <label for="statusNote">비고</label>
                             <textarea id="statusNote" rows="2" placeholder="비고 입력"></textarea>
                         </div>
-                        <div class="status-buttons status-7" id="statusChangeButtons">
-                            <button class="status-btn unchecked" data-status="미점검">미점검</button>
-                            <button class="status-btn repair-wait" data-status="수리대기">수리대기</button>
-                            <button class="status-btn repairing" data-status="수리중">수리중</button>
-                            <button class="status-btn repair-done" data-status="수리완료">수리완료</button>
-                            <button class="status-btn clean-wait" data-status="청소대기">청소대기</button>
-                            <button class="status-btn clean-done" data-status="청소완료">청소완료</button>
-                            <button class="status-btn ready" data-status="출고준비완료">출고준비</button>
+                        <div class="form-group">
+                            <label>변경할 상태 선택 *</label>
+                            <div class="status-buttons status-7" id="statusChangeButtons">
+                                <button type="button" class="status-btn unchecked" data-status="미점검">미점검</button>
+                                <button type="button" class="status-btn repair-wait" data-status="수리대기">수리대기</button>
+                                <button type="button" class="status-btn repairing" data-status="수리중">수리중</button>
+                                <button type="button" class="status-btn repair-done" data-status="수리완료">수리완료</button>
+                                <button type="button" class="status-btn clean-wait" data-status="청소대기">청소대기</button>
+                                <button type="button" class="status-btn clean-done" data-status="청소완료">청소완료</button>
+                                <button type="button" class="status-btn ready" data-status="출고준비완료">출고준비</button>
+                            </div>
                         </div>
                         <div class="btn-group">
                             <button class="btn-secondary" id="btnStatusCancel">취소</button>
+                            <button class="btn-primary" id="btnStatusSave">저장</button>
                         </div>
                     </div>
                 </div>
@@ -279,11 +283,13 @@
                         </div>
                         <div class="form-group">
                             <label for="productName">제품명 *</label>
-                            <input type="text" id="productName" placeholder="예: 에어컨 A형" required>
+                            <input type="text" id="productName" placeholder="예: 에어컨 A형" required list="productNameSuggestions" autocomplete="off">
+                            <datalist id="productNameSuggestions"></datalist>
                         </div>
                         <div class="form-group">
                             <label for="productCategory">카테고리</label>
-                            <input type="text" id="productCategory" placeholder="예: 에어컨">
+                            <input type="text" id="productCategory" placeholder="예: 에어컨" list="productCategorySuggestions" autocomplete="off">
+                            <datalist id="productCategorySuggestions"></datalist>
                         </div>
                         <div class="form-group">
                             <label for="productHours">사용가능시간 (시간) *</label>
@@ -421,7 +427,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=25"></script>
+    <script src="app.js?v=26"></script>
     <script>
         // Service Worker 등록 및 강제 업데이트
         if ('serviceWorker' in navigator) {

@@ -63,6 +63,8 @@ document.addEventListener('DOMContentLoaded', () => {
     updateProductList();
     updateQRProductSelect();
     updateQRSheetProductList();
+    updateNextProductId();
+    updateAutoCompleteSuggestions();
 });
 
 // ===== 임대기록 모달 =====
@@ -518,6 +520,9 @@ function hideScanActionPanel() {
     document.querySelectorAll('#returnStatusButtons .status-btn').forEach(b => {
         b.classList.remove('selected');
     });
+    document.querySelectorAll('#statusChangeButtons .status-btn').forEach(b => {
+        b.classList.remove('selected');
+    });
 
     currentScannedProduct = null;
 
@@ -759,38 +764,72 @@ function initScanActions() {
         hideScanActionPanel();
     });
 
-    // 상태변경 버튼 클릭
+    // 상태변경 버튼 클릭 (선택만)
+    let selectedChangeStatus = null;
     document.querySelectorAll('#statusChangeButtons .status-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            const status = btn.dataset.status;
-            const note = document.getElementById('statusNote').value.trim();
+            document.querySelectorAll('#statusChangeButtons .status-btn').forEach(b => {
+                b.classList.remove('selected');
+            });
+            btn.classList.add('selected');
+            selectedChangeStatus = btn.dataset.status;
+        });
+    });
 
-            const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
-            if (productIndex !== -1) {
-                const previousStatus = products[productIndex].status;
+    // 상태변경 저장
+    document.getElementById('btnStatusSave').addEventListener('click', () => {
+        if (!selectedChangeStatus) {
+            showToast('상태를 선택해주세요.', 'error');
+            return;
+        }
 
-                products[productIndex].status = status;
-                products[productIndex].lastUpdated = new Date().toISOString();
-                products[productIndex].lastNote = note;
+        const note = document.getElementById('statusNote').value.trim();
 
-                saveData();
+        const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
+        if (productIndex !== -1) {
+            const previousStatus = products[productIndex].status;
 
-                addHistory({
-                    type: '상태변경',
-                    productId: currentScannedProduct.id,
-                    productName: currentScannedProduct.name,
-                    previousStatus: previousStatus,
-                    newStatus: status,
-                    note: note,
-                    time: new Date().toISOString()
+            // 수리기록 처리
+            if (!products[productIndex].repairHistory) {
+                products[productIndex].repairHistory = [];
+            }
+            if (selectedChangeStatus === '수리중' && previousStatus !== '수리중') {
+                products[productIndex].repairHistory.push({
+                    startDate: new Date().toISOString(),
+                    endDate: null,
+                    note: note
                 });
-
-                showToast(`${currentScannedProduct.name} 상태 변경: ${status}`, 'success');
-                updateDashboard();
+            }
+            if (previousStatus === '수리중' && selectedChangeStatus !== '수리중') {
+                const lastRepair = products[productIndex].repairHistory[products[productIndex].repairHistory.length - 1];
+                if (lastRepair && !lastRepair.endDate) {
+                    lastRepair.endDate = new Date().toISOString();
+                    lastRepair.endNote = note;
+                }
             }
 
-            hideScanActionPanel();
-        });
+            products[productIndex].status = selectedChangeStatus;
+            products[productIndex].lastUpdated = new Date().toISOString();
+            products[productIndex].lastNote = note;
+
+            saveData();
+
+            addHistory({
+                type: '상태변경',
+                productId: currentScannedProduct.id,
+                productName: currentScannedProduct.name,
+                previousStatus: previousStatus,
+                newStatus: selectedChangeStatus,
+                note: note,
+                time: new Date().toISOString()
+            });
+
+            showToast(`${currentScannedProduct.name} 상태 변경: ${selectedChangeStatus}`, 'success');
+            updateDashboard();
+        }
+
+        selectedChangeStatus = null;
+        hideScanActionPanel();
     });
 }
 
@@ -842,6 +881,48 @@ function updateHistoryList() {
     }).join('');
 }
 
+// ===== 제품ID 자동 부여 =====
+function getNextProductId() {
+    let maxNum = 0;
+    products.forEach(p => {
+        const match = p.id.match(/^P(\d+)$/i);
+        if (match) {
+            const num = parseInt(match[1]);
+            if (num > maxNum) maxNum = num;
+        }
+    });
+    const nextNum = maxNum + 1;
+    return 'P' + String(nextNum).padStart(3, '0');
+}
+
+function updateNextProductId() {
+    const idInput = document.getElementById('productId');
+    if (idInput && !idInput.value) {
+        idInput.value = getNextProductId();
+    }
+}
+
+// ===== 자동완성 제안 =====
+function updateAutoCompleteSuggestions() {
+    // 제품명 제안
+    const nameSet = new Set(products.map(p => p.name));
+    const nameDatalist = document.getElementById('productNameSuggestions');
+    if (nameDatalist) {
+        nameDatalist.innerHTML = Array.from(nameSet).map(name =>
+            `<option value="${name}">`
+        ).join('');
+    }
+
+    // 카테고리 제안
+    const catSet = new Set(products.map(p => p.category).filter(c => c));
+    const catDatalist = document.getElementById('productCategorySuggestions');
+    if (catDatalist) {
+        catDatalist.innerHTML = Array.from(catSet).map(cat =>
+            `<option value="${cat}">`
+        ).join('');
+    }
+}
+
 // ===== 제품 관리 =====
 function initProductForm() {
     const form = document.getElementById('productForm');
@@ -883,6 +964,10 @@ function initProductForm() {
         updateProductList();
         updateQRProductSelect();
         updateQRSheetProductList();
+        updateAutoCompleteSuggestions();
+
+        // 제품ID 자동 부여
+        document.getElementById('productId').value = getNextProductId();
 
         showToast('제품이 등록되었습니다.', 'success');
     });
@@ -1178,25 +1263,22 @@ function updateDashboard() {
 function updateDashboardList() {
     const listDiv = document.getElementById('dashboardList');
 
-    // 필터링
     let filteredProducts = products;
 
-    if (currentFilter !== 'all') {
-        if (currentFilter === '임대중') {
-            filteredProducts = filteredProducts.filter(p => p.isRented);
-        } else {
-            filteredProducts = filteredProducts.filter(p => !p.isRented && p.status === currentFilter);
-        }
-    }
-
-    // 검색
+    // 검색 키워드가 있으면 전체 기준으로 검색 (필터 무시)
     if (searchKeyword) {
-        filteredProducts = filteredProducts.filter(p =>
+        filteredProducts = products.filter(p =>
             p.name.toLowerCase().includes(searchKeyword) ||
             p.id.toLowerCase().includes(searchKeyword) ||
             (p.rentalCompany && p.rentalCompany.toLowerCase().includes(searchKeyword)) ||
             (p.lastCompany && p.lastCompany.toLowerCase().includes(searchKeyword))
         );
+    } else if (currentFilter !== 'all') {
+        if (currentFilter === '임대중') {
+            filteredProducts = filteredProducts.filter(p => p.isRented);
+        } else {
+            filteredProducts = filteredProducts.filter(p => !p.isRented && p.status === currentFilter);
+        }
     }
 
     if (filteredProducts.length === 0) {
@@ -1451,6 +1533,9 @@ function initEditProductModal() {
         // UI 업데이트
         updateDashboard();
         updateProductList();
+
+        // 해당 탭 초기화면(상단)으로 스크롤
+        document.querySelector('.main-content').scrollTop = 0;
     });
 }
 
@@ -1466,6 +1551,7 @@ function showRentalHistory(productId) {
         historyHtml = '<div class="empty-state">임대 기록이 없습니다.</div>';
     } else {
         historyHtml = rentalHistory.slice().reverse().map((record, index) => {
+            const actualIndex = rentalHistory.length - 1 - index;
             const rentalDate = new Date(record.rentalDate).toLocaleDateString('ko-KR');
             const returnDate = record.returnDate ? new Date(record.returnDate).toLocaleDateString('ko-KR') : '임대중';
             const usedHours = record.usedHours !== undefined ? `${record.usedHours}시간` : '-';
@@ -1500,7 +1586,7 @@ function showRentalHistory(productId) {
             }
 
             return `
-                <div class="rental-history-item">
+                <div class="rental-history-item" data-index="${actualIndex}" data-product-id="${productId}">
                     <div class="rental-history-header">
                         <span class="rental-company">${record.company}</span>
                         <span class="rental-date">${rentalDate} ~ ${returnDate}</span>
@@ -1518,6 +1604,62 @@ function showRentalHistory(productId) {
 
     document.getElementById('rentalHistoryContent').innerHTML = historyHtml;
     document.getElementById('rentalHistoryModal').classList.add('show');
+
+    // 임대기록 삭제 이벤트 바인딩 (모바일 롱프레스 / PC 우클릭)
+    initRentalHistoryDeleteEvents();
+}
+
+function initRentalHistoryDeleteEvents() {
+    const items = document.querySelectorAll('#rentalHistoryContent .rental-history-item');
+    items.forEach(item => {
+        let longPressTimer;
+
+        // 모바일 롱프레스
+        item.addEventListener('touchstart', () => {
+            longPressTimer = setTimeout(() => {
+                showRentalDeleteBtn(item);
+            }, 600);
+        }, { passive: true });
+        item.addEventListener('touchend', () => clearTimeout(longPressTimer));
+        item.addEventListener('touchmove', () => clearTimeout(longPressTimer));
+
+        // PC 우클릭
+        item.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            showRentalDeleteBtn(item);
+        });
+    });
+}
+
+function showRentalDeleteBtn(item) {
+    // 기존 삭제 버튼 제거
+    document.querySelectorAll('.rental-history-delete-btn').forEach(btn => btn.remove());
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'rental-history-delete-btn';
+    deleteBtn.textContent = '삭제';
+    deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const pid = item.dataset.productId;
+        const idx = parseInt(item.dataset.index);
+        deleteRentalRecord(pid, idx);
+    });
+    item.style.position = 'relative';
+    item.appendChild(deleteBtn);
+}
+
+function deleteRentalRecord(productId, index) {
+    showModal('임대기록 삭제', '이 임대기록을 삭제하시겠습니까?', () => {
+        const product = products.find(p => p.id === productId);
+        if (product && product.rentalHistory && product.rentalHistory[index]) {
+            product.rentalHistory.splice(index, 1);
+            saveData();
+            showRentalHistory(productId);
+            updateDashboard();
+            updateProductList();
+            showToast('임대기록이 삭제되었습니다.', 'success');
+        }
+    });
 }
 
 // 사진 확대 모달
