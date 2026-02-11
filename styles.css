@@ -754,17 +754,19 @@ body {
 
 .serial-search-row {
     display: flex;
+    flex-direction: column;
     gap: 8px;
 }
 
 .serial-input {
-    flex: 1;
+    width: 100%;
     padding: 10px 12px;
     border: 1px solid var(--gray-300);
     border-radius: var(--radius);
     font-size: 14px;
     font-family: monospace;
     text-transform: uppercase;
+    box-sizing: border-box;
 }
 
 .serial-input:focus {
@@ -774,7 +776,8 @@ body {
 }
 
 .btn-serial-search {
-    padding: 10px 16px;
+    width: 100%;
+    padding: 12px 16px;
     background-color: var(--primary-color);
     color: var(--white);
     border: none;
@@ -782,7 +785,6 @@ body {
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
-    white-space: nowrap;
 }
 
 .btn-serial-search:active {
