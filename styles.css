@@ -654,6 +654,58 @@ body {
     border-radius: var(--radius-lg);
 }
 
+/* ===== 시리얼넘버 검색 ===== */
+.serial-search-section {
+    background-color: var(--white);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    border: 1px dashed var(--gray-300);
+}
+
+.serial-search-label {
+    font-size: 12px;
+    color: var(--gray-500);
+    margin-bottom: 8px;
+}
+
+.serial-search-row {
+    display: flex;
+    gap: 8px;
+}
+
+.serial-input {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-family: monospace;
+    text-transform: uppercase;
+}
+
+.serial-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.btn-serial-search {
+    padding: 10px 16px;
+    background-color: var(--primary-color);
+    color: var(--white);
+    border: none;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.btn-serial-search:active {
+    background-color: var(--primary-dark);
+}
+
 /* ===== 스캔 액션 패널 ===== */
 .scan-action-panel {
     background-color: var(--white);
@@ -1370,6 +1422,16 @@ body {
 
 .edit-qr-section #editQrCode {
     margin-bottom: 12px;
+}
+
+.qr-serial-number {
+    margin-top: 6px;
+    font-family: monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--gray-700);
+    letter-spacing: 1px;
+    text-align: center;
 }
 
 .edit-qr-section #editQrCode img,

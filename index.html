@@ -19,7 +19,7 @@
     <link rel="icon" type="image/png" sizes="72x72" href="icons/icon-72x72.png">
     <link rel="apple-touch-icon" href="icons/icon-72x72.png">
 
-    <link rel="stylesheet" href="styles.css?v=31">
+    <link rel="stylesheet" href="styles.css?v=32">
     <!-- QR Code 스캔 라이브러리 -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <!-- QR Code 생성 라이브러리 -->
@@ -151,6 +151,15 @@
 
                 <div class="scanner-container">
                     <div id="qr-reader"></div>
+                </div>
+
+                <!-- 시리얼넘버 입력 -->
+                <div class="serial-search-section">
+                    <p class="serial-search-label">QR 손상 시 시리얼넘버로 검색</p>
+                    <div class="serial-search-row">
+                        <input type="text" id="serialNumberInput" class="serial-input" placeholder="시리얼넘버 입력 (예: SN-ABCD1234)" maxlength="11">
+                        <button type="button" class="btn-serial-search" id="btnSerialSearch" onclick="searchBySerialNumber()">검색</button>
+                    </div>
                 </div>
 
                 <!-- 스캔 후 액션 패널 -->
@@ -436,7 +445,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=31"></script>
+    <script src="app.js?v=32"></script>
     <script>
         // Service Worker 등록 및 강제 업데이트
         if ('serviceWorker' in navigator) {

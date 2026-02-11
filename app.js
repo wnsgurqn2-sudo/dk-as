@@ -9,6 +9,20 @@ const HISTORY_KEY = 'dk_as_history';
 const PHOTOS_KEY = 'dk_as_photos';
 const STATUS_TYPES = ['미점검', '수리대기', '수리중', '수리완료', '청소대기', '청소완료', '출고준비완료'];
 
+// ===== 시리얼넘버 생성 =====
+function generateSerialNumber() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let sn = '';
+    for (let i = 0; i < 8; i++) {
+        sn += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    // 중복 검사
+    if (products.some(p => p.serialNumber === 'SN-' + sn)) {
+        return generateSerialNumber();
+    }
+    return 'SN-' + sn;
+}
+
 // 상태별 진행률
 const STATUS_PROGRESS = {
     '미점검': 0,
@@ -269,6 +283,16 @@ function loadData() {
     // 테스트용 기본 제품 추가 (없는 경우에만)
     ensureDefaultTestProducts();
 
+    // 시리얼넘버 없는 기존 제품에 자동 부여
+    let snAdded = false;
+    products.forEach(p => {
+        if (!p.serialNumber) {
+            p.serialNumber = generateSerialNumber();
+            snAdded = true;
+        }
+    });
+    if (snAdded) saveData();
+
     if (savedHistory) {
         history = JSON.parse(savedHistory);
     }
@@ -312,6 +336,7 @@ function getDefaultTestProducts() {
             rentalDate: null,
             rentalHistory: [],
             repairHistory: [],
+            serialNumber: generateSerialNumber(),
             createdAt: now,
             lastUpdated: now
         },
@@ -328,6 +353,7 @@ function getDefaultTestProducts() {
             rentalDate: null,
             rentalHistory: [],
             repairHistory: [],
+            serialNumber: generateSerialNumber(),
             createdAt: now,
             lastUpdated: now
         },
@@ -344,6 +370,7 @@ function getDefaultTestProducts() {
             rentalDate: null,
             rentalHistory: [],
             repairHistory: [],
+            serialNumber: generateSerialNumber(),
             createdAt: now,
             lastUpdated: now
         },
@@ -360,6 +387,7 @@ function getDefaultTestProducts() {
             rentalDate: null,
             rentalHistory: [],
             repairHistory: [],
+            serialNumber: generateSerialNumber(),
             createdAt: now,
             lastUpdated: now
         },
@@ -376,6 +404,7 @@ function getDefaultTestProducts() {
             rentalDate: null,
             rentalHistory: [],
             repairHistory: [],
+            serialNumber: generateSerialNumber(),
             createdAt: now,
             lastUpdated: now
         }
@@ -472,6 +501,35 @@ function onQRCodeScanned(decodedText) {
 
     currentScannedProduct = product;
     showScanActionPanel(product);
+
+    // 시리얼넘버 입력창 초기화
+    document.getElementById('serialNumberInput').value = '';
+
+    // 스캐너 일시 중지
+    stopQRScanner();
+}
+
+// 시리얼넘버로 제품 검색
+function searchBySerialNumber() {
+    const input = document.getElementById('serialNumberInput').value.trim().toUpperCase();
+    if (!input) {
+        showToast('시리얼넘버를 입력해주세요.', 'error');
+        return;
+    }
+
+    // SN- 접두사 없이 입력한 경우 자동 추가
+    const sn = input.startsWith('SN-') ? input : 'SN-' + input;
+
+    const product = products.find(p => p.serialNumber === sn);
+
+    if (!product) {
+        showToast('일치하는 제품이 없습니다: ' + sn, 'error');
+        return;
+    }
+
+    currentScannedProduct = product;
+    showScanActionPanel(product);
+    document.getElementById('serialNumberInput').value = '';
 
     // 스캐너 일시 중지
     stopQRScanner();
@@ -602,6 +660,13 @@ function clearQRReaderAndRestart() {
 
 // ===== 스캔 액션 (임대/회수/상태변경) =====
 function initScanActions() {
+    // 시리얼넘버 엔터키 검색
+    document.getElementById('serialNumberInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            searchBySerialNumber();
+        }
+    });
+
     // 임대 버튼
     document.getElementById('btnRental').addEventListener('click', () => {
         if (!currentScannedProduct) return;
@@ -1017,6 +1082,7 @@ function initProductForm() {
             isRented: false,
             rentalCompany: null,
             rentalDate: null,
+            serialNumber: generateSerialNumber(),
             createdAt: new Date().toISOString(),
             lastUpdated: new Date().toISOString()
         };
@@ -1082,6 +1148,7 @@ function initBulkRegister() {
                 isRented: false,
                 rentalCompany: null,
                 rentalDate: null,
+                serialNumber: generateSerialNumber(),
                 createdAt: new Date().toISOString(),
                 lastUpdated: new Date().toISOString()
             });
@@ -1895,6 +1962,15 @@ function generateEditModalQR(productId) {
             colorLight: '#ffffff',
             correctLevel: QRCode.CorrectLevel.H
         });
+
+        // QR 하단에 시리얼넘버 표시
+        const product = products.find(p => p.id === productId);
+        if (product && product.serialNumber) {
+            const snLabel = document.createElement('div');
+            snLabel.className = 'qr-serial-number';
+            snLabel.textContent = product.serialNumber;
+            qrContainer.appendChild(snLabel);
+        }
     } catch (e) {
         console.error('QR 생성 오류:', e);
     }
