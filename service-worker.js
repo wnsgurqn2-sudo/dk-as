@@ -1,11 +1,12 @@
 // DK AS Service Worker
-const CACHE_NAME = 'dk-as-v36';
-const APP_VERSION = '36';
+const CACHE_NAME = 'dk-as-v37';
+const APP_VERSION = '37';
 const urlsToCache = [
   './',
   './index.html',
   './styles.css?v=' + APP_VERSION,
   './app.js?v=' + APP_VERSION,
+  './firebase-config.js?v=' + APP_VERSION,
   './manifest.json',
   'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'

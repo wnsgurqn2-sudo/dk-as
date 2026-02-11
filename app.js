@@ -1,13 +1,18 @@
 /**
  * DK AS - 임대제품 점검 시스템
- * 메인 JavaScript 파일
+ * 메인 JavaScript 파일 (v37 - Firebase 통합)
  */
 
 // ===== 상수 정의 =====
-const STORAGE_KEY = 'dk_as_products';
-const HISTORY_KEY = 'dk_as_history';
-const PHOTOS_KEY = 'dk_as_photos';
 const STATUS_TYPES = ['미점검', '수리대기', '수리중', '수리완료', '청소대기', '청소완료', '출고준비완료'];
+
+// ===== Firebase 변수 =====
+let db = null;
+let authInstance = null;
+let storageInstance = null;
+let currentUser = null;
+let currentUserProfile = null;
+let isAdmin = false;
 
 // ===== 시리얼넘버 생성 =====
 function generateSerialNumber() {
@@ -47,7 +52,6 @@ function getProgressColorClass(progress) {
 // ===== 상태 관리 =====
 let products = [];
 let history = [];
-let photos = {};
 let currentFilter = 'all';
 let searchKeyword = '';
 let html5QrCode = null;
@@ -58,9 +62,39 @@ let rentalPhotos = []; // 임대 사진 배열
 let returnPhotos = []; // 회수 사진 배열
 const MAX_PHOTOS = 20; // 최대 사진 개수
 
+// ===== Firebase 초기화 =====
+function initFirebase() {
+    try {
+        if (typeof firebaseConfig === 'undefined' || firebaseConfig.apiKey === 'YOUR_API_KEY') {
+            console.error('Firebase 설정이 필요합니다. firebase-config.js를 확인하세요.');
+            return false;
+        }
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore();
+        authInstance = firebase.auth();
+        storageInstance = firebase.storage();
+        return true;
+    } catch (e) {
+        console.error('Firebase 초기화 실패:', e);
+        return false;
+    }
+}
+
 // ===== 초기화 =====
 document.addEventListener('DOMContentLoaded', () => {
-    loadData();
+    if (!initFirebase()) {
+        document.getElementById('loginOverlay').innerHTML = `
+            <div class="login-container">
+                <div class="login-header">
+                    <h1>DK AS</h1>
+                    <p>Firebase 설정이 필요합니다</p>
+                </div>
+                <p style="text-align:center;color:#666;margin-top:16px;">firebase-config.js 파일에 Firebase 설정값을 입력해주세요.</p>
+            </div>`;
+        return;
+    }
+
+    initAuth();
     initTabs();
     initProductForm();
     initBulkRegister();
@@ -75,13 +109,169 @@ document.addEventListener('DOMContentLoaded', () => {
     initDeleteAll();
     initScanActions();
     initSettings();
-    updateDashboard();
-    updateProductList();
-    updateQRProductSelect();
-    updateQRSheetProductList();
-    updateNextProductId();
-    updateAutoCompleteSuggestions();
 });
+
+// ===== 인증 관리 =====
+function initAuth() {
+    authInstance.onAuthStateChanged(async (user) => {
+        if (user) {
+            currentUser = user;
+            try {
+                const userDoc = await db.collection('users').doc(user.uid).get();
+                if (userDoc.exists) {
+                    currentUserProfile = userDoc.data();
+                } else {
+                    currentUserProfile = {
+                        email: user.email,
+                        name: user.email.split('@')[0],
+                        department: '미지정'
+                    };
+                    await db.collection('users').doc(user.uid).set({
+                        ...currentUserProfile,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+                isAdmin = user.email === ADMIN_EMAIL;
+
+                hideLoginScreen();
+                updateHeaderUserInfo();
+
+                if (isAdmin) {
+                    document.getElementById('adminHistoryTab').style.display = '';
+                }
+
+                await loadData();
+                updateDashboard();
+                updateProductList();
+                updateQRProductSelect();
+                updateQRSheetProductList();
+                updateNextProductId();
+                updateAutoCompleteSuggestions();
+            } catch (e) {
+                console.error('사용자 프로필 로드 오류:', e);
+                showToast('사용자 정보를 불러오는 중 오류가 발생했습니다.', 'error');
+            }
+        } else {
+            currentUser = null;
+            currentUserProfile = null;
+            isAdmin = false;
+            products = [];
+            history = [];
+            showLoginScreen();
+        }
+    });
+
+    // 로그인 버튼
+    document.getElementById('loginBtn').addEventListener('click', loginUser);
+    document.getElementById('loginPassword').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') loginUser();
+    });
+
+    // 회원가입 버튼
+    document.getElementById('registerBtn').addEventListener('click', registerUser);
+    document.getElementById('regDepartment').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') registerUser();
+    });
+
+    // 로그인/회원가입 전환
+    document.getElementById('showRegister').addEventListener('click', (e) => {
+        e.preventDefault();
+        document.getElementById('loginForm').style.display = 'none';
+        document.getElementById('registerForm').style.display = 'block';
+    });
+    document.getElementById('showLogin').addEventListener('click', (e) => {
+        e.preventDefault();
+        document.getElementById('registerForm').style.display = 'none';
+        document.getElementById('loginForm').style.display = 'block';
+    });
+}
+
+async function loginUser() {
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    if (!email || !password) {
+        showToast('이메일과 비밀번호를 입력해주세요.', 'error');
+        return;
+    }
+    const btn = document.getElementById('loginBtn');
+    try {
+        btn.disabled = true;
+        btn.textContent = '로그인 중...';
+        await authInstance.signInWithEmailAndPassword(email, password);
+    } catch (e) {
+        let msg = '로그인 실패';
+        if (e.code === 'auth/user-not-found') msg = '등록되지 않은 이메일입니다.';
+        else if (e.code === 'auth/wrong-password') msg = '비밀번호가 올바르지 않습니다.';
+        else if (e.code === 'auth/invalid-email') msg = '이메일 형식이 올바르지 않습니다.';
+        else if (e.code === 'auth/invalid-credential') msg = '이메일 또는 비밀번호가 올바르지 않습니다.';
+        showToast(msg, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '로그인';
+    }
+}
+
+async function registerUser() {
+    const email = document.getElementById('regEmail').value.trim();
+    const password = document.getElementById('regPassword').value;
+    const name = document.getElementById('regName').value.trim();
+    const department = document.getElementById('regDepartment').value.trim();
+
+    if (!email || !password || !name || !department) {
+        showToast('모든 항목을 입력해주세요.', 'error');
+        return;
+    }
+    if (password.length < 6) {
+        showToast('비밀번호는 6자 이상이어야 합니다.', 'error');
+        return;
+    }
+    const btn = document.getElementById('registerBtn');
+    try {
+        btn.disabled = true;
+        btn.textContent = '가입 중...';
+        const cred = await authInstance.createUserWithEmailAndPassword(email, password);
+        await db.collection('users').doc(cred.user.uid).set({
+            email: email,
+            name: name,
+            department: department,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        showToast('회원가입이 완료되었습니다.', 'success');
+    } catch (e) {
+        let msg = '회원가입 실패';
+        if (e.code === 'auth/email-already-in-use') msg = '이미 사용중인 이메일입니다.';
+        else if (e.code === 'auth/weak-password') msg = '비밀번호가 너무 약합니다.';
+        else if (e.code === 'auth/invalid-email') msg = '이메일 형식이 올바르지 않습니다.';
+        showToast(msg, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '회원가입';
+    }
+}
+
+function logoutUser() {
+    authInstance.signOut();
+    products = [];
+    history = [];
+}
+
+function showLoginScreen() {
+    document.getElementById('loginOverlay').style.display = 'flex';
+}
+
+function hideLoginScreen() {
+    document.getElementById('loginOverlay').style.display = 'none';
+}
+
+function updateHeaderUserInfo() {
+    if (currentUserProfile) {
+        document.getElementById('headerUserInfo').style.display = 'block';
+        document.getElementById('headerUserName').textContent =
+            `${currentUserProfile.department} ${currentUserProfile.name}${isAdmin ? ' (관리자)' : ''}`;
+        document.getElementById('settingsUserLabel').textContent =
+            `${currentUserProfile.name} (${currentUserProfile.department})`;
+    }
+}
 
 // ===== 임대기록 모달 =====
 function initRentalHistoryModal() {
@@ -269,161 +459,100 @@ function clearPhotos() {
 // 전역 함수 노출
 window.deletePhoto = deletePhoto;
 
-// ===== 데이터 관리 =====
-function loadData() {
-    const savedProducts = localStorage.getItem(STORAGE_KEY);
-    const savedHistory = localStorage.getItem(HISTORY_KEY);
-    const savedPhotos = localStorage.getItem(PHOTOS_KEY);
-
-    if (savedProducts) {
-        products = JSON.parse(savedProducts);
-    } else {
+// ===== 데이터 관리 (Firestore) =====
+async function loadData() {
+    try {
+        // 제품 로드
+        const productsSnapshot = await db.collection('products').get();
         products = [];
-    }
+        productsSnapshot.forEach(doc => {
+            products.push(doc.data());
+        });
 
-    // 테스트용 기본 제품 추가 (없는 경우에만)
-    ensureDefaultTestProducts();
+        // 생성일 기준 정렬
+        products.sort((a, b) => {
+            if (a.createdAt && b.createdAt) return a.createdAt.localeCompare(b.createdAt);
+            return 0;
+        });
 
-    // 시리얼넘버 없는 기존 제품에 자동 부여
-    let snAdded = false;
-    products.forEach(p => {
-        if (!p.serialNumber) {
-            p.serialNumber = generateSerialNumber();
-            snAdded = true;
+        // 시리얼넘버 없는 제품에 자동 부여
+        for (const p of products) {
+            if (!p.serialNumber) {
+                p.serialNumber = generateSerialNumber();
+                await saveProduct(p);
+            }
         }
-    });
-    if (snAdded) saveData();
 
-    if (savedHistory) {
-        history = JSON.parse(savedHistory);
-    }
-    if (savedPhotos) {
-        photos = JSON.parse(savedPhotos);
+        // 최근 히스토리 로드
+        const historySnapshot = await db.collection('history')
+            .orderBy('time', 'desc')
+            .limit(100)
+            .get();
+        history = [];
+        historySnapshot.forEach(doc => {
+            history.push(doc.data());
+        });
+    } catch (e) {
+        console.error('데이터 로드 오류:', e);
+        showToast('데이터를 불러오는 중 오류가 발생했습니다.', 'error');
     }
 }
 
-// 테스트용 기본 제품이 없으면 추가
-function ensureDefaultTestProducts() {
-    const testProducts = getDefaultTestProducts();
-    let added = false;
-
-    testProducts.forEach(testProduct => {
-        // 해당 ID의 제품이 없으면 추가
-        if (!products.some(p => p.id === testProduct.id)) {
-            products.push(testProduct);
-            added = true;
-        }
-    });
-
-    if (added) {
-        saveData();
+async function saveProduct(product) {
+    try {
+        await db.collection('products').doc(product.id).set(product);
+    } catch (e) {
+        console.error('제품 저장 오류:', e);
     }
-}
-
-// 테스트용 기본 제품 데이터
-function getDefaultTestProducts() {
-    const now = new Date().toISOString();
-    return [
-        {
-            id: 'AM001',
-            name: '에어맨 13kva',
-            category: '발전기',
-            totalHours: 5000,
-            remainingHours: 4500,
-            note: '테스트용 제품',
-            status: '미점검',
-            isRented: false,
-            rentalCompany: null,
-            rentalDate: null,
-            rentalHistory: [],
-            repairHistory: [],
-            serialNumber: generateSerialNumber(),
-            createdAt: now,
-            lastUpdated: now
-        },
-        {
-            id: 'AM002',
-            name: '에어맨 20kva',
-            category: '발전기',
-            totalHours: 5000,
-            remainingHours: 4200,
-            note: '테스트용 제품',
-            status: '미점검',
-            isRented: false,
-            rentalCompany: null,
-            rentalDate: null,
-            rentalHistory: [],
-            repairHistory: [],
-            serialNumber: generateSerialNumber(),
-            createdAt: now,
-            lastUpdated: now
-        },
-        {
-            id: 'AM003',
-            name: '에어맨 25kva',
-            category: '발전기',
-            totalHours: 5000,
-            remainingHours: 3800,
-            note: '테스트용 제품',
-            status: '미점검',
-            isRented: false,
-            rentalCompany: null,
-            rentalDate: null,
-            rentalHistory: [],
-            repairHistory: [],
-            serialNumber: generateSerialNumber(),
-            createdAt: now,
-            lastUpdated: now
-        },
-        {
-            id: 'AM004',
-            name: '에어맨 35kva',
-            category: '발전기',
-            totalHours: 5000,
-            remainingHours: 4000,
-            note: '테스트용 제품',
-            status: '미점검',
-            isRented: false,
-            rentalCompany: null,
-            rentalDate: null,
-            rentalHistory: [],
-            repairHistory: [],
-            serialNumber: generateSerialNumber(),
-            createdAt: now,
-            lastUpdated: now
-        },
-        {
-            id: 'AM005',
-            name: '에어맨 45kva',
-            category: '발전기',
-            totalHours: 5000,
-            remainingHours: 4800,
-            note: '테스트용 제품',
-            status: '미점검',
-            isRented: false,
-            rentalCompany: null,
-            rentalDate: null,
-            rentalHistory: [],
-            repairHistory: [],
-            serialNumber: generateSerialNumber(),
-            createdAt: now,
-            lastUpdated: now
-        }
-    ];
 }
 
 function saveData() {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
-        localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-    } catch (e) {
+    // 모든 제품을 Firestore에 일괄 저장 (비동기)
+    const batch = db.batch();
+    products.forEach(product => {
+        batch.set(db.collection('products').doc(product.id), product);
+    });
+    batch.commit().catch(e => {
         console.error('데이터 저장 오류:', e);
-        showToast('저장 공간이 부족합니다. 사진 수를 줄여주세요.', 'error');
+        showToast('저장 중 오류가 발생했습니다.', 'error');
+    });
+}
+
+async function deleteProductFromFirestore(productId) {
+    try {
+        await db.collection('products').doc(productId).delete();
+    } catch (e) {
+        console.error('제품 삭제 오류:', e);
     }
 }
 
-function savePhotos() {
-    localStorage.setItem(PHOTOS_KEY, JSON.stringify(photos));
+async function deleteAllProductsFromFirestore() {
+    try {
+        const snapshot = await db.collection('products').get();
+        const batch = db.batch();
+        snapshot.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+    } catch (e) {
+        console.error('전체 삭제 오류:', e);
+    }
+}
+
+// ===== Firebase Storage 사진 업로드 =====
+async function uploadPhotosToStorage(photoBase64Array, productId, type) {
+    if (!photoBase64Array || photoBase64Array.length === 0) return [];
+    const urls = [];
+    const timestamp = Date.now();
+    for (let i = 0; i < photoBase64Array.length; i++) {
+        try {
+            const ref = storageInstance.ref(`photos/${productId}/${type}_${timestamp}_${i}`);
+            await ref.putString(photoBase64Array[i], 'data_url');
+            const url = await ref.getDownloadURL();
+            urls.push(url);
+        } catch (e) {
+            console.error(`사진 업로드 오류 (${i}):`, e);
+        }
+    }
+    return urls;
 }
 
 // ===== 탭 관리 =====
@@ -450,6 +579,10 @@ function initTabs() {
 
             if (tabId === 'dashboard') {
                 updateDashboard();
+            }
+
+            if (tabId === 'admin-history' && isAdmin) {
+                loadAdminHistory();
             }
         });
     });
@@ -717,7 +850,7 @@ function initScanActions() {
     });
 
     // 임대 저장
-    document.getElementById('btnRentalSave').addEventListener('click', () => {
+    document.getElementById('btnRentalSave').addEventListener('click', async () => {
         const company = document.getElementById('rentalCompany').value.trim();
 
         if (!company) {
@@ -731,7 +864,17 @@ function initScanActions() {
             return;
         }
 
+        const saveBtn = document.getElementById('btnRentalSave');
         try {
+            saveBtn.disabled = true;
+            saveBtn.textContent = '저장 중...';
+
+            // 사진 업로드
+            let photoUrls = [];
+            if (rentalPhotos.length > 0) {
+                photoUrls = await uploadPhotosToStorage(rentalPhotos, currentScannedProduct.id, 'rental');
+            }
+
             // 제품 임대 처리
             const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
             if (productIndex !== -1) {
@@ -740,7 +883,7 @@ function initScanActions() {
                     company: company,
                     rentalDate: new Date().toISOString(),
                     remainingHoursAtRental: products[productIndex].remainingHours || products[productIndex].totalHours,
-                    photos: rentalPhotos.length > 0 ? [...rentalPhotos] : []
+                    photos: photoUrls
                 };
 
                 // 임대기록 배열 초기화 및 추가
@@ -771,6 +914,8 @@ function initScanActions() {
             console.error('임대 저장 오류:', e);
             showToast('저장 중 오류가 발생했습니다.', 'error');
         } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = '저장';
             hideScanActionPanel();
         }
     });
@@ -811,7 +956,7 @@ function initScanActions() {
     });
 
     // 임대회수 저장 버튼
-    document.getElementById('btnReturnSave').addEventListener('click', () => {
+    document.getElementById('btnReturnSave').addEventListener('click', async () => {
         if (!selectedReturnStatus) {
             showToast('상태를 선택해주세요.', 'error');
             return;
@@ -823,9 +968,19 @@ function initScanActions() {
             return;
         }
 
+        const saveBtn = document.getElementById('btnReturnSave');
         try {
+            saveBtn.disabled = true;
+            saveBtn.textContent = '저장 중...';
+
             const newRemaining = parseInt(document.getElementById('returnHours').value) || 0;
             const note = document.getElementById('returnNote').value.trim();
+
+            // 사진 업로드
+            let returnPhotoUrls = [];
+            if (returnPhotos.length > 0) {
+                returnPhotoUrls = await uploadPhotosToStorage(returnPhotos, currentScannedProduct.id, 'return');
+            }
 
             // 제품 업데이트
             const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
@@ -841,7 +996,7 @@ function initScanActions() {
                         currentRental.usedHours = usedHours;
                         currentRental.remainingHoursAtReturn = newRemaining;
                         currentRental.note = note;
-                        currentRental.returnPhotos = returnPhotos.length > 0 ? [...returnPhotos] : [];
+                        currentRental.returnPhotos = returnPhotoUrls;
                     }
                 }
 
@@ -879,6 +1034,8 @@ function initScanActions() {
             console.error('회수 저장 오류:', e);
             showToast('저장 중 오류가 발생했습니다.', 'error');
         } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = '저장';
             selectedReturnStatus = null;
             hideScanActionPanel();
         }
@@ -966,11 +1123,24 @@ function initScanActions() {
 
 // ===== 기록 관리 =====
 function addHistory(record) {
+    // 사용자 정보 추가
+    if (currentUser && currentUserProfile) {
+        record.userId = currentUser.uid;
+        record.userName = currentUserProfile.name;
+        record.userDepartment = currentUserProfile.department;
+        record.userEmail = currentUser.email;
+    }
+
     history.unshift(record);
     if (history.length > 100) {
         history = history.slice(0, 100);
     }
-    saveData();
+
+    // Firestore에 히스토리 저장
+    db.collection('history').add(record).catch(e => {
+        console.error('히스토리 저장 오류:', e);
+    });
+
     updateHistoryList();
 }
 
@@ -1092,6 +1262,14 @@ function initProductForm() {
         saveData();
         form.reset();
 
+        // 제품등록 기록 추가
+        addHistory({
+            type: '제품등록',
+            productId: product.id,
+            productName: product.name,
+            time: new Date().toISOString()
+        });
+
         updateDashboard();
         updateProductList();
         updateQRProductSelect();
@@ -1182,8 +1360,16 @@ function initDeleteAll() {
             '전체 삭제',
             `등록된 ${products.length}개의 제품을 모두 삭제하시겠습니까?<br>이 작업은 되돌릴 수 없습니다.`,
             () => {
+                const count = products.length;
                 products = [];
-                saveData();
+                deleteAllProductsFromFirestore();
+
+                addHistory({
+                    type: '제품삭제',
+                    productId: 'ALL',
+                    productName: `전체 ${count}개 제품`,
+                    time: new Date().toISOString()
+                });
 
                 updateDashboard();
                 updateProductList();
@@ -1196,7 +1382,7 @@ function initDeleteAll() {
     });
 }
 
-// ===== 설정 (크게보기) =====
+// ===== 설정 (크게보기 + 로그아웃) =====
 function initSettings() {
     const settingsBtn = document.getElementById('settingsBtn');
     const dropdown = document.getElementById('settingsDropdown');
@@ -1230,6 +1416,12 @@ function initSettings() {
         largeBtn.classList.add('active');
         normalBtn.classList.remove('active');
         localStorage.setItem('dk_as_view_mode', 'large');
+    });
+
+    // 로그아웃 버튼
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+        dropdown.classList.remove('show');
+        logoutUser();
     });
 
     // 드롭다운 외부 클릭 시 닫기
@@ -1342,7 +1534,15 @@ function deleteProduct(productId) {
         `"${product.name}" (${product.id})을(를) 삭제하시겠습니까?`,
         () => {
             products = products.filter(p => p.id !== productId);
-            saveData();
+            deleteProductFromFirestore(productId);
+
+            // 제품삭제 기록 추가
+            addHistory({
+                type: '제품삭제',
+                productId: product.id,
+                productName: product.name,
+                time: new Date().toISOString()
+            });
 
             updateDashboard();
             updateProductList();
@@ -2057,6 +2257,161 @@ function closeEditProductModal() {
     document.getElementById('editProductModal').classList.remove('show');
     currentEditProduct = null;
 }
+
+// ===== 관리자 히스토리 =====
+let adminHistoryLastDoc = null;
+let adminHistoryData = [];
+const ADMIN_HISTORY_PAGE_SIZE = 30;
+
+async function loadAdminHistory(reset = true) {
+    if (!isAdmin) return;
+
+    try {
+        if (reset) {
+            adminHistoryLastDoc = null;
+            adminHistoryData = [];
+        }
+
+        // 단순 쿼리 (orderBy만) - 복합 인덱스 불필요
+        let query = db.collection('history').orderBy('time', 'desc');
+
+        if (adminHistoryLastDoc) {
+            query = query.startAfter(adminHistoryLastDoc);
+        }
+
+        query = query.limit(ADMIN_HISTORY_PAGE_SIZE * 3);
+
+        const snapshot = await query.get();
+
+        if (snapshot.empty && reset) {
+            document.getElementById('adminHistoryList').innerHTML =
+                '<div class="empty-state">히스토리가 없습니다.</div>';
+            document.getElementById('adminHistoryLoadMore').style.display = 'none';
+            return;
+        }
+
+        if (!snapshot.empty) {
+            adminHistoryLastDoc = snapshot.docs[snapshot.docs.length - 1];
+        }
+
+        // 클라이언트 사이드 필터링
+        const userFilter = document.getElementById('adminHistoryUserFilter').value;
+        const typeFilter = document.getElementById('adminHistoryTypeFilter').value;
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (userFilter !== 'all' && data.userId !== userFilter) return;
+            if (typeFilter !== 'all' && data.type !== typeFilter) return;
+            adminHistoryData.push(data);
+        });
+
+        // 더보기 버튼 표시/숨김
+        document.getElementById('adminHistoryLoadMore').style.display =
+            snapshot.size >= ADMIN_HISTORY_PAGE_SIZE * 3 ? 'block' : 'none';
+
+        renderAdminHistory();
+
+        // 사용자 필터 옵션 업데이트
+        if (reset) {
+            loadAdminHistoryUsers();
+        }
+    } catch (e) {
+        console.error('관리자 히스토리 로드 오류:', e);
+        document.getElementById('adminHistoryList').innerHTML =
+            '<div class="empty-state">히스토리를 불러오는 중 오류가 발생했습니다.</div>';
+    }
+}
+
+function renderAdminHistory() {
+    const listDiv = document.getElementById('adminHistoryList');
+
+    if (adminHistoryData.length === 0) {
+        listDiv.innerHTML = '<div class="empty-state">히스토리가 없습니다.</div>';
+        return;
+    }
+
+    listDiv.innerHTML = adminHistoryData.map(item => {
+        const time = new Date(item.time);
+        const timeStr = time.toLocaleString('ko-KR', {
+            year: 'numeric', month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+
+        // 유형별 배지 클래스
+        let badgeClass = 'type-status';
+        if (item.type === '임대') badgeClass = 'type-rental';
+        else if (item.type === '임대회수') badgeClass = 'type-return';
+        else if (item.type === '상태변경') badgeClass = 'type-status';
+        else if (item.type === '제품등록') badgeClass = 'type-register';
+        else if (item.type === '제품삭제') badgeClass = 'type-delete';
+
+        // 상세 정보
+        let detail = '';
+        if (item.type === '임대') {
+            detail = `→ ${item.company}`;
+        } else if (item.type === '임대회수') {
+            detail = `← ${item.company || ''} | ${item.previousRemaining || 0}h→${item.newRemaining || 0}h | ${item.status || ''}`;
+        } else if (item.type === '상태변경') {
+            detail = `${item.previousStatus || ''} → ${item.newStatus || ''}`;
+        } else if (item.type === '제품등록' || item.type === '제품삭제') {
+            detail = item.productName || '';
+        }
+
+        const userName = item.userName || '알 수 없음';
+        const userDept = item.userDepartment || '';
+
+        return `
+            <div class="admin-history-item">
+                <div class="history-user">${userDept} ${userName}</div>
+                <div class="history-action">
+                    <span class="history-type-badge ${badgeClass}">${item.type}</span>
+                    ${item.productName || ''} ${detail}
+                </div>
+                <div class="history-time">${timeStr}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function loadAdminHistoryUsers() {
+    try {
+        const usersSnapshot = await db.collection('users').get();
+        const select = document.getElementById('adminHistoryUserFilter');
+        const currentValue = select.value;
+
+        // 기존 옵션 유지 (첫 번째 "전체 사용자" 옵션)
+        select.innerHTML = '<option value="all">전체 사용자</option>';
+
+        usersSnapshot.forEach(doc => {
+            const user = doc.data();
+            const option = document.createElement('option');
+            option.value = doc.id;
+            option.textContent = `${user.department || ''} ${user.name || user.email}`;
+            select.appendChild(option);
+        });
+
+        select.value = currentValue || 'all';
+    } catch (e) {
+        console.error('사용자 목록 로드 오류:', e);
+    }
+}
+
+// 관리자 히스토리 필터 이벤트
+document.addEventListener('DOMContentLoaded', () => {
+    const userFilter = document.getElementById('adminHistoryUserFilter');
+    const typeFilter = document.getElementById('adminHistoryTypeFilter');
+    const loadMoreBtn = document.getElementById('adminHistoryLoadMore');
+
+    if (userFilter) {
+        userFilter.addEventListener('change', () => loadAdminHistory(true));
+    }
+    if (typeFilter) {
+        typeFilter.addEventListener('change', () => loadAdminHistory(true));
+    }
+    if (loadMoreBtn) {
+        loadMoreBtn.addEventListener('click', () => loadAdminHistory(false));
+    }
+});
 
 // 전역 함수로 노출
 window.deleteProduct = deleteProduct;
