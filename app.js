@@ -17,7 +17,8 @@ const STATUS_PROGRESS = {
     '수리완료': 50,
     '청소대기': 70,
     '청소완료': 90,
-    '출고준비완료': 100
+    '출고준비완료': 100,
+    '예약': 100
 };
 
 // 진행률에 따른 색상 클래스
@@ -1139,7 +1140,7 @@ function updateProductList() {
     }
 
     listDiv.innerHTML = products.map(product => {
-        // 임대/회수 정보 생성
+        // 임대/회수/예약 정보 생성
         let infoHtml = '';
         if (product.isRented) {
             const rentalDate = product.rentalDate ?
@@ -1148,6 +1149,15 @@ function updateProductList() {
                 <div class="rental-info-box">
                     <span class="rental-label">임대중</span>
                     <span class="rental-detail">${product.rentalCompany} | ${rentalDate}</span>
+                </div>
+            `;
+        } else if (product.status === '예약' && product.reservedBy) {
+            const reservedDate = product.reservedDate ?
+                new Date(product.reservedDate).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) : '';
+            infoHtml = `
+                <div class="reserved-info-box">
+                    <span class="reserved-label">예약</span>
+                    <span class="reserved-detail">${product.reservedBy} | ${reservedDate}</span>
                 </div>
             `;
         } else {
@@ -1164,6 +1174,16 @@ function updateProductList() {
             }
         }
 
+        // 상태 배지
+        let statusBadge = '';
+        if (product.isRented) {
+            statusBadge = `<span class="rental-badge">임대중</span>`;
+        } else if (product.status === '예약') {
+            statusBadge = `<span class="reserved-badge">예약</span>`;
+        } else {
+            statusBadge = `<span class="product-status ${product.status}">${product.status}</span>`;
+        }
+
         return `
             <div class="product-item product-manage-item" data-id="${product.id}">
                 <span class="product-status-badge ${product.isRented ? '임대중' : product.status}"></span>
@@ -1172,7 +1192,7 @@ function updateProductList() {
                     <div class="product-id">${product.id} | ${product.category} | 잔여: ${product.remainingHours || product.totalHours}h</div>
                     ${infoHtml}
                 </div>
-                ${product.isRented ? `<span class="rental-badge">임대중</span>` : `<span class="product-status ${product.status}">${product.status}</span>`}
+                ${statusBadge}
                 <div class="product-actions">
                     <button class="btn-icon danger delete-btn" data-id="${product.id}" title="삭제">🗑️</button>
                 </div>
@@ -1283,6 +1303,7 @@ function updateDashboard() {
     const cleanWait = products.filter(p => !p.isRented && p.status === '청소대기').length;
     const cleanDone = products.filter(p => !p.isRented && p.status === '청소완료').length;
     const ready = products.filter(p => !p.isRented && p.status === '출고준비완료').length;
+    const reserved = products.filter(p => !p.isRented && p.status === '예약').length;
 
     // 통계 카드 업데이트
     document.getElementById('statTotal').textContent = total;
@@ -1294,6 +1315,7 @@ function updateDashboard() {
     document.getElementById('statCleanWait').textContent = cleanWait;
     document.getElementById('statCleanDone').textContent = cleanDone;
     document.getElementById('statReady').textContent = ready;
+    document.getElementById('statReserved').textContent = reserved;
 
     // 필터 버튼 개수 업데이트
     document.getElementById('filterCountAll').textContent = total;
@@ -1305,6 +1327,7 @@ function updateDashboard() {
     document.getElementById('filterCountCleanWait').textContent = cleanWait;
     document.getElementById('filterCountCleanDone').textContent = cleanDone;
     document.getElementById('filterCountReady').textContent = ready;
+    document.getElementById('filterCountReserved').textContent = reserved;
 
     // 진행률 (각 항목별 가중치 적용)
     let totalProgress = 0;
@@ -1335,7 +1358,8 @@ function updateDashboardList() {
             p.name.toLowerCase().includes(searchKeyword) ||
             p.id.toLowerCase().includes(searchKeyword) ||
             (p.rentalCompany && p.rentalCompany.toLowerCase().includes(searchKeyword)) ||
-            (p.lastCompany && p.lastCompany.toLowerCase().includes(searchKeyword))
+            (p.lastCompany && p.lastCompany.toLowerCase().includes(searchKeyword)) ||
+            (p.reservedBy && p.reservedBy.toLowerCase().includes(searchKeyword))
         );
     } else if (currentFilter !== 'all') {
         if (currentFilter === '임대중') {
@@ -1370,6 +1394,16 @@ function updateDashboardList() {
                 </div>
             `;
             statusHtml = `<span class="rental-badge">임대중</span>`;
+        } else if (product.status === '예약' && product.reservedBy) {
+            const reservedDate = product.reservedDate ?
+                new Date(product.reservedDate).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) : '';
+            infoHtml = `
+                <div class="reserved-info-box">
+                    <span class="reserved-label">예약</span>
+                    <span class="reserved-detail">${product.reservedBy} | ${reservedDate}</span>
+                </div>
+            `;
+            statusHtml = `<span class="reserved-badge">예약</span>`;
         } else {
             // 회수된 제품: 최근 회수일자 + 업체명 표시
             const lastRentalRecord = product.rentalHistory && product.rentalHistory.length > 0 ?
@@ -1530,6 +1564,18 @@ function initEditProductModal() {
         showRepairHistory(currentEditProduct.id);
     });
 
+    // 상태 변경 시 예약 담당자 입력 표시/숨김
+    document.getElementById('editProductStatus').addEventListener('change', (e) => {
+        const reservedByGroup = document.getElementById('reservedByGroup');
+        if (e.target.value === '예약') {
+            reservedByGroup.style.display = 'block';
+            document.getElementById('editReservedBy').focus();
+        } else {
+            reservedByGroup.style.display = 'none';
+            document.getElementById('editReservedBy').value = '';
+        }
+    });
+
     saveBtn.addEventListener('click', () => {
         if (!currentEditProduct) return;
 
@@ -1541,6 +1587,15 @@ function initEditProductModal() {
 
         const newStatus = document.getElementById('editProductStatus').value;
         const newNote = document.getElementById('editProductNote').value.trim();
+
+        // 예약 시 담당자 이름 필수
+        if (newStatus === '예약') {
+            const reservedBy = document.getElementById('editReservedBy').value.trim();
+            if (!reservedBy) {
+                showToast('담당자 이름을 입력해주세요.', 'error');
+                return;
+            }
+        }
 
         const productIndex = products.findIndex(p => p.id === currentEditProduct.id);
         if (productIndex !== -1) {
@@ -1572,6 +1627,17 @@ function initEditProductModal() {
             products[productIndex].status = newStatus;
             products[productIndex].lastNote = newNote;
             products[productIndex].lastUpdated = new Date().toISOString();
+
+            // 예약 정보 처리
+            if (newStatus === '예약') {
+                products[productIndex].isReserved = true;
+                products[productIndex].reservedBy = document.getElementById('editReservedBy').value.trim();
+                products[productIndex].reservedDate = new Date().toISOString();
+            } else {
+                products[productIndex].isReserved = false;
+                products[productIndex].reservedBy = null;
+                products[productIndex].reservedDate = null;
+            }
 
             saveData();
 
@@ -1787,9 +1853,20 @@ function openEditProductModal(productId) {
             <option value="청소대기">청소대기</option>
             <option value="청소완료">청소완료</option>
             <option value="출고준비완료">출고준비완료</option>
+            <option value="예약" style="color: #2563eb; font-weight: 700;">예약</option>
         `;
         statusSelect.value = product.status;
         statusFormGroup.classList.remove('disabled');
+    }
+
+    // 예약 담당자 필드 처리
+    const reservedByGroup = document.getElementById('reservedByGroup');
+    if (product.status === '예약' && product.reservedBy) {
+        reservedByGroup.style.display = 'block';
+        document.getElementById('editReservedBy').value = product.reservedBy;
+    } else {
+        reservedByGroup.style.display = 'none';
+        document.getElementById('editReservedBy').value = '';
     }
 
     document.getElementById('editProductNote').value = product.lastNote || '';

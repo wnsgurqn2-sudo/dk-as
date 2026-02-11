@@ -178,6 +178,10 @@ body {
     grid-template-columns: repeat(5, 1fr);
 }
 
+.stats-container.stats-10 {
+    grid-template-columns: repeat(5, 1fr);
+}
+
 .stat-card {
     background-color: var(--white);
     border-radius: var(--radius);
@@ -228,6 +232,10 @@ body {
 
 .stat-card.repairing {
     border-left-color: #f97316;
+}
+
+.stat-card.reserved {
+    border-left-color: #8b5cf6;
 }
 
 .stat-number {
@@ -409,6 +417,10 @@ body {
     background-color: var(--info-color);
 }
 
+.product-status-badge.예약 {
+    background-color: #8b5cf6;
+}
+
 /* 기존 호환성 */
 .product-status-badge.고장 {
     background-color: var(--danger-color);
@@ -546,6 +558,11 @@ body {
     color: #059669;
 }
 
+.product-status.예약 {
+    background-color: #ede9fe;
+    color: #7c3aed;
+}
+
 /* 기존 호환성 */
 .product-status.고장 {
     background-color: #fef2f2;
@@ -564,6 +581,15 @@ body {
     border-radius: 10px;
     font-size: 11px;
     font-weight: 500;
+}
+
+.reserved-badge {
+    background-color: #ede9fe;
+    color: #7c3aed;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
 }
 
 .last-rental {
@@ -1760,6 +1786,25 @@ body {
 
 .rental-info-box .rental-detail {
     color: #3b82f6;
+}
+
+.reserved-info-box {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 8px;
+    background-color: #ede9fe;
+    border-radius: 6px;
+    font-size: 11px;
+}
+
+.reserved-info-box .reserved-label {
+    font-weight: 600;
+    color: #7c3aed;
+}
+
+.reserved-info-box .reserved-detail {
+    color: #8b5cf6;
 }
 
 .return-info-box {

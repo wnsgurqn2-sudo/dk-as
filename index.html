@@ -19,7 +19,7 @@
     <link rel="icon" type="image/png" sizes="72x72" href="icons/icon-72x72.png">
     <link rel="apple-touch-icon" href="icons/icon-72x72.png">
 
-    <link rel="stylesheet" href="styles.css?v=29">
+    <link rel="stylesheet" href="styles.css?v=30">
     <!-- QR Code 스캔 라이브러리 -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <!-- QR Code 생성 라이브러리 -->
@@ -66,7 +66,7 @@
                 </div>
 
                 <!-- 현황 카드 -->
-                <div class="stats-container stats-9">
+                <div class="stats-container stats-10">
                     <div class="stat-card total" data-filter="all">
                         <div class="stat-number" id="statTotal">0</div>
                         <div class="stat-label">전체</div>
@@ -103,6 +103,10 @@
                         <div class="stat-number" id="statReady">0</div>
                         <div class="stat-label">출고준비</div>
                     </div>
+                    <div class="stat-card reserved" data-filter="예약">
+                        <div class="stat-number" id="statReserved">0</div>
+                        <div class="stat-label">예약</div>
+                    </div>
                 </div>
 
                 <!-- 진행률 바 -->
@@ -127,6 +131,7 @@
                     <button class="filter-btn" data-filter="청소대기">청소대기(<span id="filterCountCleanWait">0</span>)</button>
                     <button class="filter-btn" data-filter="청소완료">청소완료(<span id="filterCountCleanDone">0</span>)</button>
                     <button class="filter-btn" data-filter="출고준비완료">출고준비(<span id="filterCountReady">0</span>)</button>
+                    <button class="filter-btn" data-filter="예약">예약(<span id="filterCountReserved">0</span>)</button>
                     <button class="filter-btn reset" id="filterResetBtn">초기화</button>
                 </div>
 
@@ -379,6 +384,10 @@
                         <option value="출고준비완료">출고준비완료</option>
                     </select>
                 </div>
+                <div class="form-group" id="reservedByGroup" style="display: none;">
+                    <label for="editReservedBy">담당자 이름 *</label>
+                    <input type="text" id="editReservedBy" placeholder="예약 담당자 이름 입력">
+                </div>
                 <div class="form-group">
                     <label for="editProductNote">비고</label>
                     <textarea id="editProductNote" rows="3" placeholder="비고 입력"></textarea>
@@ -427,7 +436,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=29"></script>
+    <script src="app.js?v=30"></script>
     <script>
         // Service Worker 등록 및 강제 업데이트
         if ('serviceWorker' in navigator) {
