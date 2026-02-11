@@ -19,13 +19,13 @@
     <link rel="icon" type="image/png" sizes="72x72" href="icons/icon-72x72.png">
     <link rel="apple-touch-icon" href="icons/icon-72x72.png">
 
-    <link rel="stylesheet" href="styles.css?v=39">
+    <link rel="stylesheet" href="styles.css?v=40">
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
-    <script src="firebase-config.js?v=39"></script>
+    <script src="firebase-config.js?v=40"></script>
     <!-- QR Code 스캔 라이브러리 -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <!-- QR Code 생성 라이브러리 -->
@@ -59,6 +59,10 @@
                         <button class="view-btn active" data-view="normal" id="viewNormalBtn">기본</button>
                         <button class="view-btn" data-view="large" id="viewLargeBtn">크게보기</button>
                     </div>
+                </div>
+                <div class="settings-item" id="userManageItem" style="display: none; margin-top: 8px;">
+                    <span class="settings-label">사용자 관리</span>
+                    <button class="view-btn active" id="userManageBtn" style="background: #8b5cf6; color: #fff;">승인설정</button>
                 </div>
                 <div class="settings-item" style="margin-top: 8px;">
                     <span class="settings-label" id="settingsUserLabel"></span>
@@ -537,7 +541,53 @@
         </div>
     </div>
 
-    <script src="app.js?v=39"></script>
+    <!-- 사용자 관리 모달 (관리자 전용) -->
+    <div class="modal-overlay" id="userManageModal">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h3>사용자 관리</h3>
+                <button class="modal-close" id="userManageClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="user-manage-section">
+                    <h4>승인 대기 (<span id="pendingCount">0</span>명)</h4>
+                    <div id="pendingUserList" class="user-manage-list">
+                        <div class="empty-state">대기 중인 사용자가 없습니다.</div>
+                    </div>
+                </div>
+                <div class="user-manage-section" style="margin-top: 20px;">
+                    <h4>승인된 사용자 (<span id="approvedCount">0</span>명)</h4>
+                    <div id="approvedUserList" class="user-manage-list">
+                        <div class="empty-state">승인된 사용자가 없습니다.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="userManageBack">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 승인 대기 화면 -->
+    <div class="login-overlay" id="pendingApprovalOverlay" style="display: none;">
+        <div class="login-container" style="text-align: center;">
+            <div class="login-header">
+                <h1>DK AS</h1>
+                <p>임대제품 점검 시스템</p>
+            </div>
+            <div style="margin: 24px 0;">
+                <div style="font-size: 48px; margin-bottom: 16px;">⏳</div>
+                <h3 style="color: #333; margin-bottom: 8px;">승인 대기 중</h3>
+                <p style="color: #666; font-size: 14px; line-height: 1.6;">
+                    관리자 승인 후 사용할 수 있습니다.<br>
+                    잠시만 기다려주세요.
+                </p>
+            </div>
+            <button type="button" class="btn-secondary" id="pendingLogoutBtn" style="width: 100%; margin-top: 16px;">로그아웃</button>
+        </div>
+    </div>
+
+    <script src="app.js?v=40"></script>
     <script>
         // Service Worker 등록 및 강제 업데이트
         if ('serviceWorker' in navigator) {

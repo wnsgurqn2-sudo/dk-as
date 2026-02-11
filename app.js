@@ -109,6 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initDeleteAll();
     initScanActions();
     initSettings();
+    initUserManage();
 });
 
 // ===== 인증 관리 =====
@@ -121,10 +122,25 @@ function initAuth() {
                 if (userDoc.exists) {
                     currentUserProfile = userDoc.data();
                     isAdmin = user.email === ADMIN_EMAIL;
+
+                    // 관리자는 항상 승인됨
+                    if (isAdmin && !currentUserProfile.approved) {
+                        await db.collection('users').doc(user.uid).update({ approved: true });
+                        currentUserProfile.approved = true;
+                    }
+
+                    // 미승인 사용자 차단
+                    if (!currentUserProfile.approved) {
+                        showPendingApproval();
+                        return;
+                    }
+
                     hideLoginScreen();
+                    hidePendingApproval();
                     updateHeaderUserInfo();
                     if (isAdmin) {
                         document.getElementById('adminHistoryTab').style.display = '';
+                        document.getElementById('userManageItem').style.display = '';
                     }
                     await loadData();
                     updateDashboard();
@@ -134,7 +150,7 @@ function initAuth() {
                     updateNextProductId();
                     updateAutoCompleteSuggestions();
                 } else {
-                    // 프로필 미등록 (Google 로그인 최초 등) → 프로필 완성 폼 표시
+                    // 프로필 미등록 (Google 로그인 최초) → 프로필 완성 폼 표시
                     showProfileCompleteForm();
                 }
             } catch (e) {
@@ -201,25 +217,32 @@ async function completeProfile() {
     try {
         btn.disabled = true;
         btn.textContent = '저장 중...';
-        currentUserProfile = { email: currentUser.email, name, department };
+        isAdmin = currentUser.email === ADMIN_EMAIL;
+        const approved = isAdmin; // 관리자만 자동 승인
+        currentUserProfile = { email: currentUser.email, name, department, approved };
         await db.collection('users').doc(currentUser.uid).set({
             ...currentUserProfile,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-        isAdmin = currentUser.email === ADMIN_EMAIL;
-        hideLoginScreen();
-        updateHeaderUserInfo();
-        if (isAdmin) {
+
+        if (!approved) {
+            showPendingApproval();
+            showToast('프로필이 등록되었습니다. 관리자 승인을 기다려주세요.', 'success');
+        } else {
+            hideLoginScreen();
+            hidePendingApproval();
+            updateHeaderUserInfo();
             document.getElementById('adminHistoryTab').style.display = '';
+            document.getElementById('userManageItem').style.display = '';
+            await loadData();
+            updateDashboard();
+            updateProductList();
+            updateQRProductSelect();
+            updateQRSheetProductList();
+            updateNextProductId();
+            updateAutoCompleteSuggestions();
+            showToast('프로필이 등록되었습니다.', 'success');
         }
-        await loadData();
-        updateDashboard();
-        updateProductList();
-        updateQRProductSelect();
-        updateQRSheetProductList();
-        updateNextProductId();
-        updateAutoCompleteSuggestions();
-        showToast('프로필이 등록되었습니다.', 'success');
     } catch (e) {
         showToast('프로필 저장 실패: ' + e.message, 'error');
     } finally {
@@ -238,11 +261,122 @@ function showLoginScreen() {
     document.getElementById('loginOverlay').style.display = 'flex';
     document.getElementById('loginForm').style.display = 'block';
     document.getElementById('profileCompleteForm').style.display = 'none';
+    hidePendingApproval();
 }
 
 function hideLoginScreen() {
     document.getElementById('loginOverlay').style.display = 'none';
     document.getElementById('profileCompleteForm').style.display = 'none';
+}
+
+function showPendingApproval() {
+    document.getElementById('loginOverlay').style.display = 'none';
+    document.getElementById('pendingApprovalOverlay').style.display = 'flex';
+}
+
+function hidePendingApproval() {
+    document.getElementById('pendingApprovalOverlay').style.display = 'none';
+}
+
+// ===== 사용자 관리 (관리자 전용) =====
+function initUserManage() {
+    const modal = document.getElementById('userManageModal');
+    document.getElementById('userManageBtn').addEventListener('click', () => {
+        document.getElementById('settingsDropdown').classList.remove('show');
+        modal.classList.add('show');
+        loadUserList();
+    });
+    document.getElementById('userManageClose').addEventListener('click', () => modal.classList.remove('show'));
+    document.getElementById('userManageBack').addEventListener('click', () => modal.classList.remove('show'));
+    document.getElementById('pendingLogoutBtn').addEventListener('click', logoutUser);
+}
+
+async function loadUserList() {
+    try {
+        const snapshot = await db.collection('users').get();
+        const pendingUsers = [];
+        const approvedUsers = [];
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const user = { id: doc.id, ...data };
+            // 관리자는 별도 표시하지 않음
+            if (data.email === ADMIN_EMAIL) return;
+            if (data.approved) {
+                approvedUsers.push(user);
+            } else {
+                pendingUsers.push(user);
+            }
+        });
+
+        renderPendingUsers(pendingUsers);
+        renderApprovedUsers(approvedUsers);
+    } catch (e) {
+        console.error('사용자 목록 로드 실패:', e);
+        showToast('사용자 목록을 불러오는 중 오류가 발생했습니다.', 'error');
+    }
+}
+
+function renderPendingUsers(users) {
+    const container = document.getElementById('pendingUserList');
+    document.getElementById('pendingCount').textContent = users.length;
+    if (users.length === 0) {
+        container.innerHTML = '<div class="empty-state">대기 중인 사용자가 없습니다.</div>';
+        return;
+    }
+    container.innerHTML = users.map(u => `
+        <div class="user-manage-item">
+            <div class="user-manage-info">
+                <div class="user-manage-name">${u.department || ''} ${u.name || ''}</div>
+                <div class="user-manage-email">${u.email || ''}</div>
+            </div>
+            <div class="user-manage-actions">
+                <button class="btn-approve" onclick="approveUser('${u.id}')">승인</button>
+                <button class="btn-reject" onclick="removeUser('${u.id}')">거부</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderApprovedUsers(users) {
+    const container = document.getElementById('approvedUserList');
+    document.getElementById('approvedCount').textContent = users.length;
+    if (users.length === 0) {
+        container.innerHTML = '<div class="empty-state">승인된 사용자가 없습니다.</div>';
+        return;
+    }
+    container.innerHTML = users.map(u => `
+        <div class="user-manage-item">
+            <div class="user-manage-info">
+                <div class="user-manage-name">${u.department || ''} ${u.name || ''}</div>
+                <div class="user-manage-email">${u.email || ''}</div>
+            </div>
+            <div class="user-manage-actions">
+                <button class="btn-reject" onclick="removeUser('${u.id}')">제거</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function approveUser(userId) {
+    try {
+        await db.collection('users').doc(userId).update({ approved: true });
+        showToast('사용자를 승인했습니다.', 'success');
+        loadUserList();
+    } catch (e) {
+        showToast('승인 실패: ' + e.message, 'error');
+    }
+}
+
+async function removeUser(userId) {
+    if (!confirm('이 사용자를 제거하시겠습니까?')) return;
+    try {
+        await db.collection('users').doc(userId).delete();
+        showToast('사용자를 제거했습니다.', 'success');
+        loadUserList();
+    } catch (e) {
+        showToast('제거 실패: ' + e.message, 'error');
+    }
 }
 
 function updateHeaderUserInfo() {
