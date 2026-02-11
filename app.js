@@ -536,12 +536,13 @@ function hideScanActionPanel() {
 
     currentScannedProduct = null;
 
-    // QR 스캔 영역으로 스크롤
+    // 해당 탭 초기화면(상단)으로 스크롤
     try {
-        const scannerContainer = document.querySelector('.scanner-container');
-        if (scannerContainer) {
-            scannerContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const mainContent = document.querySelector('.main-content');
+        if (mainContent) {
+            mainContent.scrollTop = 0;
         }
+        window.scrollTo(0, 0);
     } catch (e) {
         console.error('스크롤 오류:', e);
     }
@@ -1578,7 +1579,11 @@ function initEditProductModal() {
         updateProductList();
 
         // 해당 탭 초기화면(상단)으로 스크롤
-        document.querySelector('.main-content').scrollTop = 0;
+        const mainContent = document.querySelector('.main-content');
+        if (mainContent) {
+            mainContent.scrollTop = 0;
+        }
+        window.scrollTo(0, 0);
     });
 }
 
