@@ -151,37 +151,13 @@ function initAuth() {
         }
     });
 
-    // 로그인 버튼
-    document.getElementById('loginBtn').addEventListener('click', loginUser);
-    document.getElementById('loginPassword').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') loginUser();
-    });
-
     // Google 로그인 버튼
     document.getElementById('googleLoginBtn').addEventListener('click', googleSignIn);
-
-    // 회원가입 버튼
-    document.getElementById('registerBtn').addEventListener('click', registerUser);
-    document.getElementById('regDepartment').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') registerUser();
-    });
 
     // 프로필 완성 버튼
     document.getElementById('profileCompleteBtn').addEventListener('click', completeProfile);
     document.getElementById('profileDepartment').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') completeProfile();
-    });
-
-    // 로그인/회원가입 전환
-    document.getElementById('showRegister').addEventListener('click', (e) => {
-        e.preventDefault();
-        document.getElementById('loginForm').style.display = 'none';
-        document.getElementById('registerForm').style.display = 'block';
-    });
-    document.getElementById('showLogin').addEventListener('click', (e) => {
-        e.preventDefault();
-        document.getElementById('registerForm').style.display = 'none';
-        document.getElementById('loginForm').style.display = 'block';
     });
 }
 
@@ -206,7 +182,6 @@ function showProfileCompleteForm() {
     const overlay = document.getElementById('loginOverlay');
     overlay.style.display = 'flex';
     document.getElementById('loginForm').style.display = 'none';
-    document.getElementById('registerForm').style.display = 'none';
     document.getElementById('profileCompleteForm').style.display = 'block';
     // Google 계정에서 이름 가져오기
     if (currentUser && currentUser.displayName) {
@@ -253,69 +228,6 @@ async function completeProfile() {
     }
 }
 
-async function loginUser() {
-    const email = document.getElementById('loginEmail').value.trim();
-    const password = document.getElementById('loginPassword').value;
-    if (!email || !password) {
-        showToast('이메일과 비밀번호를 입력해주세요.', 'error');
-        return;
-    }
-    const btn = document.getElementById('loginBtn');
-    try {
-        btn.disabled = true;
-        btn.textContent = '로그인 중...';
-        await authInstance.signInWithEmailAndPassword(email, password);
-    } catch (e) {
-        let msg = '로그인 실패';
-        if (e.code === 'auth/user-not-found') msg = '등록되지 않은 이메일입니다.';
-        else if (e.code === 'auth/wrong-password') msg = '비밀번호가 올바르지 않습니다.';
-        else if (e.code === 'auth/invalid-email') msg = '이메일 형식이 올바르지 않습니다.';
-        else if (e.code === 'auth/invalid-credential') msg = '이메일 또는 비밀번호가 올바르지 않습니다.';
-        showToast(msg, 'error');
-    } finally {
-        btn.disabled = false;
-        btn.textContent = '로그인';
-    }
-}
-
-async function registerUser() {
-    const email = document.getElementById('regEmail').value.trim();
-    const password = document.getElementById('regPassword').value;
-    const name = document.getElementById('regName').value.trim();
-    const department = document.getElementById('regDepartment').value.trim();
-
-    if (!email || !password || !name || !department) {
-        showToast('모든 항목을 입력해주세요.', 'error');
-        return;
-    }
-    if (password.length < 6) {
-        showToast('비밀번호는 6자 이상이어야 합니다.', 'error');
-        return;
-    }
-    const btn = document.getElementById('registerBtn');
-    try {
-        btn.disabled = true;
-        btn.textContent = '가입 중...';
-        const cred = await authInstance.createUserWithEmailAndPassword(email, password);
-        await db.collection('users').doc(cred.user.uid).set({
-            email: email,
-            name: name,
-            department: department,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        showToast('회원가입이 완료되었습니다.', 'success');
-    } catch (e) {
-        let msg = '회원가입 실패';
-        if (e.code === 'auth/email-already-in-use') msg = '이미 사용중인 이메일입니다.';
-        else if (e.code === 'auth/weak-password') msg = '비밀번호가 너무 약합니다.';
-        else if (e.code === 'auth/invalid-email') msg = '이메일 형식이 올바르지 않습니다.';
-        showToast(msg, 'error');
-    } finally {
-        btn.disabled = false;
-        btn.textContent = '회원가입';
-    }
-}
-
 function logoutUser() {
     authInstance.signOut();
     products = [];
@@ -325,7 +237,6 @@ function logoutUser() {
 function showLoginScreen() {
     document.getElementById('loginOverlay').style.display = 'flex';
     document.getElementById('loginForm').style.display = 'block';
-    document.getElementById('registerForm').style.display = 'none';
     document.getElementById('profileCompleteForm').style.display = 'none';
 }
 

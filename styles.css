@@ -2458,24 +2458,6 @@ body.large-view .rental-history-delete-btn {
     margin-top: 8px;
 }
 
-.login-divider {
-    display: flex;
-    align-items: center;
-    margin: 16px 0;
-    color: var(--gray-400);
-    font-size: 13px;
-}
-.login-divider::before,
-.login-divider::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: var(--gray-200);
-}
-.login-divider span {
-    padding: 0 12px;
-}
-
 .btn-google-login {
     width: 100%;
     display: flex;
