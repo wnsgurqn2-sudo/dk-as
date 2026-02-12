@@ -2061,8 +2061,11 @@ async function exportQRExcel() {
         // mm → 엑셀 단위 변환
         const colWidthExcel = Math.max(Math.round(labelWidth / 2.5), 14); // 열 너비 (문자수)
         const rowHeightPt = Math.max(Math.round(labelHeight * 2.2), 60); // 행 높이 (pt)
-        // QR 이미지 크기: 행 높이의 85%를 정사각형으로 (pt → px: *1.333)
-        const qrImgSize = Math.round(rowHeightPt * 1.333 * 0.85);
+        // 셀 크기 (px): QR 이미지를 이 캔버스에 가운데 그림
+        const cellWidthPx = Math.round(colWidthExcel * 7.5);
+        const cellHeightPx = Math.round(rowHeightPt * 1.333);
+        // QR 정사각형 크기: 셀의 작은 쪽 기준 85%
+        const qrDrawSize = Math.round(Math.min(cellWidthPx, cellHeightPx) * 0.85);
 
         // 1열: 제품명 (넓게)
         sheet.getColumn(1).width = 25;
@@ -2119,8 +2122,8 @@ async function exportQRExcel() {
             const snRow = sheet.getRow(snRowNum);
             snRow.height = 20;
 
-            // QR 이미지 생성 (1번만 생성 후 매수만큼 반복 배치)
-            let qrBase64 = null;
+            // QR 이미지 생성 → 셀 크기 캔버스에 가운데 합성
+            let centeredQRBase64 = null;
             try {
                 const qrContainer = document.createElement('div');
                 tempDiv.appendChild(qrContainer);
@@ -2131,9 +2134,19 @@ async function exportQRExcel() {
                     correctLevel: QRCode.CorrectLevel.M
                 });
                 await new Promise(r => setTimeout(r, 120));
-                const canvas = qrContainer.querySelector('canvas');
-                if (canvas) {
-                    qrBase64 = canvas.toDataURL('image/png').split(',')[1];
+                const qrCanvas = qrContainer.querySelector('canvas');
+                if (qrCanvas) {
+                    // 셀 크기 캔버스를 만들어 QR을 가운데 그림
+                    const cellCanvas = document.createElement('canvas');
+                    cellCanvas.width = cellWidthPx;
+                    cellCanvas.height = cellHeightPx;
+                    const ctx = cellCanvas.getContext('2d');
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillRect(0, 0, cellWidthPx, cellHeightPx);
+                    const qrX = Math.round((cellWidthPx - qrDrawSize) / 2);
+                    const qrY = Math.round((cellHeightPx - qrDrawSize) / 2);
+                    ctx.drawImage(qrCanvas, 0, 0, 256, 256, qrX, qrY, qrDrawSize, qrDrawSize);
+                    centeredQRBase64 = cellCanvas.toDataURL('image/png').split(',')[1];
                 }
                 tempDiv.removeChild(qrContainer);
             } catch (qrErr) {
@@ -2141,21 +2154,15 @@ async function exportQRExcel() {
             }
 
             // 매수만큼 가로로 QR 이미지 + 시리얼넘버 배치
-            // 가로 중앙 오프셋 계산: 셀 너비(px) 대비 QR 이미지 비율
-            const colPx = colWidthExcel * 7.5;
-            const hMargin = colPx > qrImgSize ? (1 - qrImgSize / colPx) / 2 : 0;
-            // 세로 중앙 오프셋: 행 높이(px) 대비 QR 이미지 비율
-            const rowPx = rowHeightPt * 1.333;
-            const vMargin = rowPx > qrImgSize ? (1 - qrImgSize / rowPx) / 2 : 0;
             for (let c = 0; c < labelCount; c++) {
                 const colIdx = c + 1; // 0-based column index (0=A열=제품명, 1=B열=첫 QR)
 
-                // QR 이미지를 셀 가운데 배치 (정사각형 유지)
-                if (qrBase64) {
-                    const imageId = workbook.addImage({ base64: qrBase64, extension: 'png' });
+                // QR 이미지 배치 (이미 가운데 정렬된 이미지를 셀에 꽉 채움)
+                if (centeredQRBase64) {
+                    const imageId = workbook.addImage({ base64: centeredQRBase64, extension: 'png' });
                     sheet.addImage(imageId, {
-                        tl: { col: colIdx + hMargin, row: qrRowNum - 1 + vMargin },
-                        ext: { width: qrImgSize, height: qrImgSize }
+                        tl: { col: colIdx, row: qrRowNum - 1 },
+                        ext: { width: cellWidthPx, height: cellHeightPx }
                     });
                 }
 
