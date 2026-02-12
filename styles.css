@@ -1637,6 +1637,43 @@ body {
     color: var(--gray-700);
 }
 
+.repair-history-items {
+    font-size: 13px;
+    color: var(--gray-700);
+    margin-top: 4px;
+    padding: 4px 8px;
+    background-color: #f8fafc;
+    border-radius: 6px;
+    line-height: 1.5;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.outsource-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    background-color: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fca5a5;
+    margin-left: 6px;
+}
+
 .repair-note {
     font-weight: 500;
 }

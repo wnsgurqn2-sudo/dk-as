@@ -20,13 +20,13 @@
     <link rel="icon" type="image/png" sizes="72x72" href="icons/icon-72x72.png">
     <link rel="apple-touch-icon" href="icons/icon-72x72.png">
 
-    <link rel="stylesheet" href="styles.css?v=52">
+    <link rel="stylesheet" href="styles.css?v=53">
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
-    <script src="firebase-config.js?v=52"></script>
+    <script src="firebase-config.js?v=53"></script>
     <!-- QR Code 스캔 라이브러리 -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <!-- QR Code 생성 라이브러리 -->
@@ -312,6 +312,16 @@
                         <div class="form-group">
                             <label for="statusNote">비고</label>
                             <textarea id="statusNote" rows="2" placeholder="비고 입력"></textarea>
+                        </div>
+                        <div class="form-group" id="repairItemsGroup" style="display: none;">
+                            <label for="repairItems">수리항목 *</label>
+                            <textarea id="repairItems" rows="3" placeholder="수리항목 입력 (예: 모터 교체, 필터 청소)"></textarea>
+                        </div>
+                        <div class="form-group" id="outsourceGroup" style="display: none;">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="outsourceCheck">
+                                <span>외주요청</span>
+                            </label>
                         </div>
                         <div class="form-group">
                             <label>변경할 상태 선택 *</label>
@@ -648,7 +658,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=52"></script>
+    <script src="app.js?v=53"></script>
     <script>
         // Service Worker 등록 및 강제 업데이트
         if ('serviceWorker' in navigator) {

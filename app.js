@@ -476,17 +476,20 @@ function showRepairHistory(productId) {
         historyHtml = repairHistory.slice().reverse().map((record) => {
             const startDate = new Date(record.startDate).toLocaleDateString('ko-KR');
             const endDate = record.endDate ? new Date(record.endDate).toLocaleDateString('ko-KR') : '수리중';
-            const note = record.note || '-';
+            const repairItems = record.repairItems ? esc(record.repairItems) : '';
+            const note = record.note || record.endNote || '';
+
+            const outsourceTag = record.outsource ? '<span class="outsource-badge">외주요청</span>' : '';
 
             return `
                 <div class="repair-history-item">
                     <div class="repair-history-header">
                         <span class="repair-status ${record.endDate ? 'completed' : 'in-progress'}">${record.endDate ? '완료' : '수리중'}</span>
+                        ${outsourceTag}
                         <span class="repair-date">${startDate} ~ ${endDate}</span>
                     </div>
-                    <div class="repair-history-details">
-                        <span class="repair-note">${note}</span>
-                    </div>
+                    ${repairItems ? `<div class="repair-history-items"><strong>수리항목:</strong> ${repairItems.replace(/\n/g, '<br>')}</div>` : ''}
+                    ${note ? `<div class="repair-history-details"><span class="repair-note">${esc(note)}</span></div>` : ''}
                 </div>
             `;
         }).join('');
@@ -1217,6 +1220,22 @@ function initScanActions() {
             });
             btn.classList.add('selected');
             selectedChangeStatus = btn.dataset.status;
+            // 수리중/수리완료 선택 시 수리항목 입력창 표시
+            const repairGroup = document.getElementById('repairItemsGroup');
+            const outsourceGroup = document.getElementById('outsourceGroup');
+            if (selectedChangeStatus === '수리중' || selectedChangeStatus === '수리완료') {
+                repairGroup.style.display = '';
+            } else {
+                repairGroup.style.display = 'none';
+                document.getElementById('repairItems').value = '';
+            }
+            // 수리중 선택 시에만 외주요청 체크박스 표시
+            if (selectedChangeStatus === '수리중') {
+                outsourceGroup.style.display = '';
+            } else {
+                outsourceGroup.style.display = 'none';
+                document.getElementById('outsourceCheck').checked = false;
+            }
         });
     });
 
@@ -1235,6 +1254,14 @@ function initScanActions() {
 
         try {
             const note = document.getElementById('statusNote').value.trim();
+            const repairItems = document.getElementById('repairItems').value.trim();
+            const outsourceRequested = document.getElementById('outsourceCheck').checked;
+
+            // 수리중/수리완료 선택 시 수리항목 필수
+            if ((selectedChangeStatus === '수리중' || selectedChangeStatus === '수리완료') && !repairItems) {
+                showToast('수리항목을 입력해주세요.', 'error');
+                return;
+            }
 
             const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
             if (productIndex !== -1) {
@@ -1248,15 +1275,39 @@ function initScanActions() {
                     products[productIndex].repairHistory.push({
                         startDate: new Date().toISOString(),
                         endDate: null,
+                        repairItems: repairItems,
+                        outsource: outsourceRequested,
                         note: note
                     });
                 }
-                if (previousStatus === '수리중' && selectedChangeStatus !== '수리중') {
+                if (selectedChangeStatus === '수리완료') {
+                    const lastRepair = products[productIndex].repairHistory[products[productIndex].repairHistory.length - 1];
+                    if (lastRepair && !lastRepair.endDate) {
+                        lastRepair.endDate = new Date().toISOString();
+                        lastRepair.repairItems = repairItems;
+                        lastRepair.endNote = note;
+                    } else {
+                        // 수리중 없이 바로 수리완료인 경우
+                        products[productIndex].repairHistory.push({
+                            startDate: new Date().toISOString(),
+                            endDate: new Date().toISOString(),
+                            repairItems: repairItems,
+                            note: note
+                        });
+                    }
+                } else if (previousStatus === '수리중' && selectedChangeStatus !== '수리중') {
                     const lastRepair = products[productIndex].repairHistory[products[productIndex].repairHistory.length - 1];
                     if (lastRepair && !lastRepair.endDate) {
                         lastRepair.endDate = new Date().toISOString();
                         lastRepair.endNote = note;
                     }
+                }
+
+                // 외주요청 상태 처리
+                if (selectedChangeStatus === '수리중' && outsourceRequested) {
+                    products[productIndex].outsourceRequested = true;
+                } else if (selectedChangeStatus === '수리완료') {
+                    products[productIndex].outsourceRequested = false;
                 }
 
                 products[productIndex].status = selectedChangeStatus;
@@ -1283,6 +1334,10 @@ function initScanActions() {
             showToast('저장 중 오류가 발생했습니다.', 'error');
         } finally {
             selectedChangeStatus = null;
+            document.getElementById('repairItems').value = '';
+            document.getElementById('repairItemsGroup').style.display = 'none';
+            document.getElementById('outsourceCheck').checked = false;
+            document.getElementById('outsourceGroup').style.display = 'none';
             hideScanActionPanel();
         }
     });
@@ -1655,11 +1710,13 @@ function updateProductList() {
             statusBadge = `<span class="product-status ${product.status}">${product.status}</span>`;
         }
 
+        const outsourceBadge = (product.status === '수리중' && product.outsourceRequested) ? '<span class="outsource-badge">외주요청</span>' : '';
+
         return `
             <div class="product-item product-manage-item" data-id="${product.id}">
                 <span class="product-status-badge ${product.isRented ? '임대중' : product.status}"></span>
                 <div class="product-info">
-                    <div class="product-name">${esc(product.name)}</div>
+                    <div class="product-name">${esc(product.name)}${outsourceBadge}</div>
                     <div class="product-id">${esc(product.id)} | ${esc(product.category)} | 잔여: ${product.remainingHours || product.totalHours}h</div>
                     ${infoHtml}
                 </div>
@@ -1900,11 +1957,13 @@ function updateDashboardList() {
             statusHtml = `<span class="product-status ${product.status}">${product.status}</span>`;
         }
 
+        const outsourceBadge = (product.status === '수리중' && product.outsourceRequested) ? '<span class="outsource-badge">외주요청</span>' : '';
+
         return `
             <div class="product-item dashboard-item" data-id="${product.id}">
                 <span class="product-status-badge ${product.isRented ? '임대중' : product.status}"></span>
                 <div class="product-info">
-                    <div class="product-name">${esc(product.name)}</div>
+                    <div class="product-name">${esc(product.name)}${outsourceBadge}</div>
                     <div class="product-id">${esc(product.id)} | 잔여: ${product.remainingHours || product.totalHours}h</div>
                     ${infoHtml}
                     ${product.lastNote ? `<div class="product-note">메모: ${esc(product.lastNote)}</div>` : ''}
