@@ -2139,14 +2139,18 @@ async function exportQRExcel() {
             }
 
             // 매수만큼 가로로 QR 이미지 + 시리얼넘버 배치
+            // 셀 너비(px) 계산: 엑셀 열너비 1 ≈ 7px
+            const colWidthPx = colWidthExcel * 7;
             for (let c = 0; c < labelCount; c++) {
                 const colIdx = c + 1; // 0-based column index (0=A열=제품명, 1=B열=첫 QR)
 
-                // QR 이미지 배치
+                // QR 이미지를 셀 가운데 배치
                 if (qrBase64) {
                     const imageId = workbook.addImage({ base64: qrBase64, extension: 'png' });
+                    // 가로 중앙: (셀너비 - 이미지크기) / 2 / 셀너비 = 비율 오프셋
+                    const hOffset = colWidthPx > qrSizePx ? (colWidthPx - qrSizePx) / 2 / colWidthPx : 0.02;
                     sheet.addImage(imageId, {
-                        tl: { col: colIdx + 0.1, row: qrRowNum - 1 + 0.05 },
+                        tl: { col: colIdx + hOffset, row: qrRowNum - 1 + 0.05 },
                         ext: { width: qrSizePx, height: qrSizePx }
                     });
                 }
@@ -2162,7 +2166,7 @@ async function exportQRExcel() {
                 const snCell = snRow.getCell(c + 2);
                 snCell.value = sn;
                 snCell.font = { size: 9, color: { argb: 'FF333333' } };
-                snCell.alignment = { horizontal: 'center', vertical: 'top' };
+                snCell.alignment = { horizontal: 'center', vertical: 'middle' };
                 snCell.border = {
                     bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }
                 };
