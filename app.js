@@ -2058,22 +2058,26 @@ async function exportQRExcel() {
         const workbook = new ExcelJS.Workbook();
         const sheet = workbook.addWorksheet('QR 라벨');
 
-        // 열 설정
-        sheet.columns = [
-            { header: 'No', key: 'no', width: 6 },
-            { header: '제품ID', key: 'productId', width: 15 },
-            { header: '제품명', key: 'name', width: 25 },
-            { header: '카테고리', key: 'category', width: 15 },
-            { header: '시리얼넘버', key: 'serialNumber', width: 18 },
-            { header: 'QR코드', key: 'qr', width: 20 },
-            { header: '라벨 가로(mm)', key: 'width', width: 14 },
-            { header: '라벨 세로(mm)', key: 'height', width: 14 },
-            { header: '매수', key: 'count', width: 8 }
-        ];
+        // mm → 엑셀 포인트 변환 (1mm ≈ 2.83pt, 행높이는 pt, 열너비는 문자수 기준 약 7px/1width)
+        const qrSizePx = Math.round(labelHeight * 2.83); // QR 이미지 크기 (px 기준으로 사용)
+        const colWidthExcel = Math.max(Math.round(labelWidth / 2.5), 14); // 열 너비
 
-        // 헤더 스타일
-        sheet.getRow(1).eachCell(cell => {
-            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        // 1열: 제품명 (넓게)
+        sheet.getColumn(1).width = 25;
+        // 2열~: QR 라벨 열들
+        for (let c = 0; c < labelCount; c++) {
+            sheet.getColumn(c + 2).width = colWidthExcel;
+        }
+
+        // 헤더 행
+        const headerRow = sheet.getRow(1);
+        headerRow.getCell(1).value = '제품명';
+        for (let c = 0; c < labelCount; c++) {
+            headerRow.getCell(c + 2).value = `QR ${c + 1}`;
+        }
+        headerRow.height = 22;
+        headerRow.eachCell(cell => {
+            cell.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } };
             cell.alignment = { horizontal: 'center', vertical: 'middle' };
             cell.border = {
@@ -2082,63 +2086,89 @@ async function exportQRExcel() {
             };
         });
 
-        // QR 코드 생성용 임시 캔버스
+        // QR 코드 생성용 임시 DOM
         const tempDiv = document.createElement('div');
         tempDiv.style.cssText = 'position:absolute;left:-9999px;top:-9999px;';
         document.body.appendChild(tempDiv);
 
-        let rowNum = 1;
+        // 각 제품: QR행 + 시리얼넘버행 = 2행씩 사용
+        let currentRow = 2; // 헤더 다음부터
         for (const product of selectedProducts) {
-            rowNum++;
-            const row = sheet.addRow({
-                no: rowNum - 1,
-                productId: product.productId || '',
-                name: product.name || '',
-                category: product.category || '',
-                serialNumber: product.serialNumber || '',
-                qr: '',
-                width: labelWidth,
-                height: labelHeight,
-                count: labelCount
-            });
+            const qrRowNum = currentRow;
+            const snRowNum = currentRow + 1;
+            const sn = product.serialNumber || product.productId || product.id;
 
-            // 행 높이 설정 (QR 코드 표시용)
-            row.height = 80;
-            row.eachCell(cell => {
-                cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-                cell.border = {
-                    top: { style: 'thin' }, bottom: { style: 'thin' },
-                    left: { style: 'thin' }, right: { style: 'thin' }
-                };
-            });
+            // QR 행 (이미지용 - 높이 크게)
+            const qrRow = sheet.getRow(qrRowNum);
+            qrRow.height = Math.max(Math.round(labelHeight * 2.2), 60);
 
-            // QR코드 이미지 생성
+            // 제품명 셀 (2행 병합)
+            sheet.mergeCells(qrRowNum, 1, snRowNum, 1);
+            const nameCell = qrRow.getCell(1);
+            nameCell.value = product.name || '';
+            nameCell.font = { bold: true, size: 11 };
+            nameCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+            nameCell.border = {
+                top: { style: 'thin' }, bottom: { style: 'thin' },
+                left: { style: 'thin' }, right: { style: 'thin' }
+            };
+
+            // 시리얼넘버 행 (텍스트용 - 높이 작게)
+            const snRow = sheet.getRow(snRowNum);
+            snRow.height = 20;
+
+            // QR 이미지 생성 (1번만 생성 후 매수만큼 반복 배치)
+            let qrBase64 = null;
             try {
                 const qrContainer = document.createElement('div');
                 tempDiv.appendChild(qrContainer);
-                const qr = new QRCode(qrContainer, {
-                    text: product.serialNumber || product.productId || product.id,
-                    width: 128,
-                    height: 128,
+                new QRCode(qrContainer, {
+                    text: sn,
+                    width: 256,
+                    height: 256,
                     correctLevel: QRCode.CorrectLevel.M
                 });
-
-                // QRCode 라이브러리가 비동기로 이미지를 생성하므로 잠시 대기
-                await new Promise(r => setTimeout(r, 100));
-
+                await new Promise(r => setTimeout(r, 120));
                 const canvas = qrContainer.querySelector('canvas');
                 if (canvas) {
-                    const base64 = canvas.toDataURL('image/png').split(',')[1];
-                    const imageId = workbook.addImage({ base64, extension: 'png' });
-                    sheet.addImage(imageId, {
-                        tl: { col: 5, row: rowNum - 1 },
-                        ext: { width: 75, height: 75 }
-                    });
+                    qrBase64 = canvas.toDataURL('image/png').split(',')[1];
                 }
                 tempDiv.removeChild(qrContainer);
             } catch (qrErr) {
-                console.warn('QR 생성 실패:', product.productId, qrErr);
+                console.warn('QR 생성 실패:', sn, qrErr);
             }
+
+            // 매수만큼 가로로 QR 이미지 + 시리얼넘버 배치
+            for (let c = 0; c < labelCount; c++) {
+                const colIdx = c + 1; // 0-based column index (0=A열=제품명, 1=B열=첫 QR)
+
+                // QR 이미지 배치
+                if (qrBase64) {
+                    const imageId = workbook.addImage({ base64: qrBase64, extension: 'png' });
+                    sheet.addImage(imageId, {
+                        tl: { col: colIdx + 0.1, row: qrRowNum - 1 + 0.05 },
+                        ext: { width: qrSizePx, height: qrSizePx }
+                    });
+                }
+
+                // QR 행 셀 테두리
+                const qrCell = qrRow.getCell(c + 2);
+                qrCell.border = {
+                    top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }
+                };
+                qrCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+                // 시리얼넘버 텍스트 셀
+                const snCell = snRow.getCell(c + 2);
+                snCell.value = sn;
+                snCell.font = { size: 9, color: { argb: 'FF333333' } };
+                snCell.alignment = { horizontal: 'center', vertical: 'top' };
+                snCell.border = {
+                    bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }
+                };
+            }
+
+            currentRow += 2; // 다음 제품으로 (QR행 + SN행)
         }
 
         document.body.removeChild(tempDiv);
