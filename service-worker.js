@@ -1,6 +1,6 @@
 // DK AS Service Worker
-const CACHE_NAME = 'dk-as-v41';
-const APP_VERSION = '41';
+const CACHE_NAME = 'dk-as-v42';
+const APP_VERSION = '42';
 const urlsToCache = [
   './',
   './index.html',
@@ -46,7 +46,15 @@ self.addEventListener('activate', (event) => {
 
 // 요청 가로채기 - 네트워크 우선, 실패 시 캐시
 self.addEventListener('fetch', (event) => {
+  // GET 요청만 캐시 (POST 등은 캐시 불가)
+  if (event.request.method !== 'GET') return;
+
   const url = new URL(event.request.url);
+
+  // Firebase/Google API 요청은 캐시하지 않음
+  if (url.hostname.includes('googleapis.com') || url.hostname.includes('firebaseio.com') || url.hostname.includes('firebasestorage.app')) {
+    return;
+  }
 
   // index.html, app.js, styles.css는 항상 네트워크에서 가져오기 (캐시 무시)
   if (url.pathname.endsWith('index.html') || url.pathname.endsWith('/') || url.pathname.endsWith('app.js') || url.pathname.endsWith('styles.css')) {
@@ -69,7 +77,6 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // 성공적인 응답은 캐시에 저장
         if (response.status === 200) {
           const responseClone = response.clone();
           caches.open(CACHE_NAME)
@@ -80,7 +87,6 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => {
-        // 네트워크 실패 시 캐시에서 가져오기
         return caches.match(event.request);
       })
   );
