@@ -2570,48 +2570,75 @@ async function generateTestData() {
         const companies = ['삼성전자', 'LG전자', '대우', '위닉스', '쿠쿠', '코웨이', '신일', '한일', '캐리어', '센추리'];
         const testProducts = [];
 
+        // 2. 50개 제품 생성 (각 제품에 rentalHistory 5건 포함)
         updateProgress('제품 50개 생성 중...');
-        const productBatch = db.batch();
-        for (let i = 1; i <= 50; i++) {
-            const cat = categories[Math.floor(Math.random() * categories.length)];
-            const id = `T${String(i).padStart(3, '0')}`;
-            const hours = Math.floor(Math.random() * 2000) + 500;
-            const sn = generateSerialNumber();
-            const product = {
-                id, name: `${cat} ${String.fromCharCode(65 + (i % 26))}${Math.floor(i / 26)}형`,
-                category: cat, totalHours: hours, remainingHours: hours,
-                note: '', status: '미점검', isRented: false,
-                rentalCompany: null, rentalDate: null,
-                serialNumber: sn,
-                createdAt: new Date().toISOString(),
-                lastUpdated: new Date().toISOString()
-            };
-            testProducts.push(product);
-            productBatch.set(db.collection('products').doc(id), product);
-        }
-        await productBatch.commit();
-        updateProgress('제품 50개 등록 완료');
-
-        // 3. 각 제품별 히스토리 생성 (임대 5회 + 회수 5회)
         const now = Date.now();
         let historyCount = 0;
         const totalHistory = 50 * 10;
 
+        for (let i = 1; i <= 50; i++) {
+            const cat = categories[Math.floor(Math.random() * categories.length)];
+            const id = `T${String(i).padStart(3, '0')}`;
+            const totalHours = Math.floor(Math.random() * 2000) + 500;
+            const sn = generateSerialNumber();
+
+            // 제품별 rentalHistory 배열 생성 (5회 임대+회수)
+            const rentalHistory = [];
+            let remainingHours = totalHours;
+            for (let r = 0; r < 5; r++) {
+                const company = companies[Math.floor(Math.random() * companies.length)];
+                const usedHours = Math.floor(Math.random() * 100) + 10;
+                const rentalDate = new Date(now - (50 - i) * 86400000 - (5 - r) * 7200000).toISOString();
+                const returnDate = new Date(now - (50 - i) * 86400000 - (5 - r) * 7200000 + 3600000).toISOString();
+                remainingHours = Math.max(0, remainingHours - usedHours);
+
+                rentalHistory.push({
+                    type: '임대',
+                    company,
+                    rentalDate,
+                    returnDate,
+                    remainingHoursAtRental: remainingHours + usedHours,
+                    remainingHoursAtReturn: remainingHours,
+                    usedHours,
+                    note: r === 0 ? '테스트 특이사항' : '',
+                    photos: testPhotoUrls,
+                    returnPhotos: testPhotoUrls
+                });
+            }
+
+            const lastStatus = STATUS_TYPES[Math.floor(Math.random() * STATUS_TYPES.length)];
+            const product = {
+                id, name: `${cat} ${String.fromCharCode(65 + (i % 26))}${Math.floor(i / 26)}형`,
+                category: cat, totalHours, remainingHours,
+                note: '', status: lastStatus, isRented: false,
+                rentalCompany: null, rentalDate: null,
+                serialNumber: sn, rentalHistory,
+                createdAt: new Date().toISOString(),
+                lastUpdated: new Date().toISOString()
+            };
+            testProducts.push(product);
+            updateProgress(`제품 생성 중... ${i}/50`);
+        }
+
+        // Firestore 일괄 저장 (500개 제한 → 제품 50개씩은 OK)
+        const productBatch = db.batch();
+        testProducts.forEach(p => productBatch.set(db.collection('products').doc(p.id), p));
+        await productBatch.commit();
+        updateProgress('제품 50개 등록 완료 (각 임대기록 5건 포함)');
+
+        // 3. 히스토리 컬렉션에도 기록 생성 (관리자 히스토리 탭용)
         for (let p = 0; p < 50; p++) {
             const prod = testProducts[p];
             const batch = db.batch();
 
             for (let r = 0; r < 5; r++) {
-                const rentalTime = new Date(now - (50 - p) * 86400000 - (5 - r) * 7200000).toISOString();
-                const returnTime = new Date(now - (50 - p) * 86400000 - (5 - r) * 7200000 + 3600000).toISOString();
-                const company = companies[Math.floor(Math.random() * companies.length)];
-                const usedHours = Math.floor(Math.random() * 100) + 10;
+                const rental = prod.rentalHistory[r];
 
                 // 임대 기록
                 const rentalRef = db.collection('history').doc();
                 batch.set(rentalRef, {
                     type: '임대', productId: prod.id, productName: prod.name,
-                    company, time: rentalTime,
+                    company: rental.company, time: rental.rentalDate,
                     rentalPhotos: testPhotoUrls,
                     userId: currentUser.uid, userName: currentUserProfile.name,
                     userDepartment: currentUserProfile.department, userEmail: currentUser.email
@@ -2621,9 +2648,9 @@ async function generateTestData() {
                 const returnRef = db.collection('history').doc();
                 batch.set(returnRef, {
                     type: '임대회수', productId: prod.id, productName: prod.name,
-                    company, returnStatus: STATUS_TYPES[Math.floor(Math.random() * STATUS_TYPES.length)],
-                    usedHours, note: r === 0 ? '테스트 특이사항' : '',
-                    time: returnTime,
+                    company: rental.company, returnStatus: prod.status,
+                    usedHours: rental.usedHours, note: rental.note,
+                    time: rental.returnDate,
                     returnPhotos: testPhotoUrls,
                     userId: currentUser.uid, userName: currentUserProfile.name,
                     userDepartment: currentUserProfile.department, userEmail: currentUser.email
