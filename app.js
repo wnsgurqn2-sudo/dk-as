@@ -2139,19 +2139,16 @@ async function exportQRExcel() {
             }
 
             // 매수만큼 가로로 QR 이미지 + 시리얼넘버 배치
-            // 셀 너비(px) 계산: 엑셀 열너비 1 ≈ 7px
-            const colWidthPx = colWidthExcel * 7;
+            const margin = 0.1; // 셀 양쪽 10% 여백 → 가운데 80% 영역에 이미지 배치
             for (let c = 0; c < labelCount; c++) {
                 const colIdx = c + 1; // 0-based column index (0=A열=제품명, 1=B열=첫 QR)
 
-                // QR 이미지를 셀 가운데 배치
+                // QR 이미지를 셀 가운데 배치 (tl+br 방식: 셀 범위 기준)
                 if (qrBase64) {
                     const imageId = workbook.addImage({ base64: qrBase64, extension: 'png' });
-                    // 가로 중앙: (셀너비 - 이미지크기) / 2 / 셀너비 = 비율 오프셋
-                    const hOffset = colWidthPx > qrSizePx ? (colWidthPx - qrSizePx) / 2 / colWidthPx : 0.02;
                     sheet.addImage(imageId, {
-                        tl: { col: colIdx + hOffset, row: qrRowNum - 1 + 0.05 },
-                        ext: { width: qrSizePx, height: qrSizePx }
+                        tl: { col: colIdx + margin, row: qrRowNum - 1 + 0.05 },
+                        br: { col: colIdx + 1 - margin, row: qrRowNum - 0.05 }
                     });
                 }
 
