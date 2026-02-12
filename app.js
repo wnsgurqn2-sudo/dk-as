@@ -3,6 +3,12 @@
  * 메인 JavaScript 파일 (v37 - Firebase 통합)
  */
 
+// ===== XSS 방지 =====
+function esc(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 // ===== 상수 정의 =====
 const STATUS_TYPES = ['미점검', '수리대기', '수리중', '수리완료', '청소대기', '청소완료', '출고준비완료'];
 
@@ -338,16 +344,16 @@ function renderPendingUsers(users) {
     container.innerHTML = users.map(u => `
         <div class="user-manage-item">
             <div class="user-manage-info">
-                <div class="user-manage-name">${u.department || ''} ${u.name || ''}</div>
-                <div class="user-manage-email">${u.email || ''}</div>
+                <div class="user-manage-name">${esc(u.department)} ${esc(u.name)}</div>
+                <div class="user-manage-email">${esc(u.email)}</div>
             </div>
             <div class="user-manage-actions">
-                <select class="role-select" id="roleSelect_${u.id}">
+                <select class="role-select" id="roleSelect_${esc(u.id)}">
                     <option value="${ROLE.USER}">사용자</option>
                     <option value="${ROLE.ADMIN}">관리자</option>
                 </select>
-                <button class="btn-approve" onclick="approveUser('${u.id}')">승인</button>
-                <button class="btn-reject" onclick="removeUser('${u.id}')">거부</button>
+                <button class="btn-approve" onclick="approveUser('${esc(u.id)}')">승인</button>
+                <button class="btn-reject" onclick="removeUser('${esc(u.id)}')">거부</button>
             </div>
         </div>
     `).join('');
@@ -366,15 +372,15 @@ function renderApprovedUsers(users) {
         return `
         <div class="user-manage-item">
             <div class="user-manage-info">
-                <div class="user-manage-name">${u.department || ''} ${u.name || ''} <span class="role-badge role-${role}">${roleLabel}</span></div>
-                <div class="user-manage-email">${u.email || ''}</div>
+                <div class="user-manage-name">${esc(u.department)} ${esc(u.name)} <span class="role-badge role-${esc(role)}">${esc(roleLabel)}</span></div>
+                <div class="user-manage-email">${esc(u.email)}</div>
             </div>
             <div class="user-manage-actions">
-                <select class="role-select" id="roleSelect_${u.id}" onchange="changeUserRole('${u.id}', this.value)">
+                <select class="role-select" id="roleSelect_${esc(u.id)}" onchange="changeUserRole('${esc(u.id)}', this.value)">
                     <option value="${ROLE.USER}" ${role === ROLE.USER ? 'selected' : ''}>사용자</option>
                     <option value="${ROLE.ADMIN}" ${role === ROLE.ADMIN ? 'selected' : ''}>관리자</option>
                 </select>
-                <button class="btn-reject" onclick="removeUser('${u.id}')">제거</button>
+                <button class="btn-reject" onclick="removeUser('${esc(u.id)}')">제거</button>
             </div>
         </div>
     `;
@@ -1313,21 +1319,21 @@ function updateHistoryList() {
         let detail = '';
         let itemClass = '';
         if (item.type === '임대') {
-            detail = `→ ${item.company}`;
+            detail = `→ ${esc(item.company)}`;
             itemClass = 'rental';
         } else if (item.type === '임대회수') {
-            detail = `← ${item.company} | ${item.previousRemaining}h→${item.newRemaining}h (실사용:${item.usedHours}h) | ${item.status}`;
+            detail = `← ${esc(item.company)} | ${item.previousRemaining}h→${item.newRemaining}h (실사용:${item.usedHours}h) | ${esc(item.status)}`;
             itemClass = 'return';
         } else if (item.type === '상태변경') {
-            detail = `${item.previousStatus} → ${item.newStatus}`;
+            detail = `${esc(item.previousStatus)} → ${esc(item.newStatus)}`;
             itemClass = 'status-change';
         }
 
         return `
             <div class="history-item ${itemClass}">
                 <span class="history-time">${timeStr}</span>
-                <span class="history-type">${item.type}</span>
-                <span class="history-product">${item.productName}</span>
+                <span class="history-type">${esc(item.type)}</span>
+                <span class="history-product">${esc(item.productName)}</span>
                 <span class="history-detail">${detail}</span>
             </div>
         `;
@@ -1644,13 +1650,13 @@ function updateProductList() {
             <div class="product-item product-manage-item" data-id="${product.id}">
                 <span class="product-status-badge ${product.isRented ? '임대중' : product.status}"></span>
                 <div class="product-info">
-                    <div class="product-name">${product.name}</div>
-                    <div class="product-id">${product.id} | ${product.category} | 잔여: ${product.remainingHours || product.totalHours}h</div>
+                    <div class="product-name">${esc(product.name)}</div>
+                    <div class="product-id">${esc(product.id)} | ${esc(product.category)} | 잔여: ${product.remainingHours || product.totalHours}h</div>
                     ${infoHtml}
                 </div>
                 ${statusBadge}
                 <div class="product-actions">
-                    <button class="btn-icon danger delete-btn" data-id="${product.id}" title="삭제">🗑️</button>
+                    <button class="btn-icon danger delete-btn" data-id="${esc(product.id)}" title="삭제">🗑️</button>
                 </div>
             </div>
         `;
@@ -1683,7 +1689,7 @@ function deleteProduct(productId) {
 
     showModal(
         '제품 삭제',
-        `"${product.name}" (${product.id})을(를) 삭제하시겠습니까?`,
+        `"${esc(product.name)}" (${esc(product.id)})을(를) 삭제하시겠습니까?`,
         () => {
             products = products.filter(p => p.id !== productId);
             deleteProductFromFirestore(productId);
@@ -1889,10 +1895,10 @@ function updateDashboardList() {
             <div class="product-item dashboard-item" data-id="${product.id}">
                 <span class="product-status-badge ${product.isRented ? '임대중' : product.status}"></span>
                 <div class="product-info">
-                    <div class="product-name">${product.name}</div>
-                    <div class="product-id">${product.id} | 잔여: ${product.remainingHours || product.totalHours}h</div>
+                    <div class="product-name">${esc(product.name)}</div>
+                    <div class="product-id">${esc(product.id)} | 잔여: ${product.remainingHours || product.totalHours}h</div>
                     ${infoHtml}
-                    ${product.lastNote ? `<div class="product-note">메모: ${product.lastNote}</div>` : ''}
+                    ${product.lastNote ? `<div class="product-note">메모: ${esc(product.lastNote)}</div>` : ''}
                     <div class="item-progress-section">
                         <div class="item-progress-bar">
                             <div class="item-progress-fill ${progressClass}" style="width: ${itemProgress}%"></div>
@@ -1994,10 +2000,10 @@ function renderQRPrintList() {
         const checked = qrPrintSelectedIds.has(p.id) ? 'checked' : '';
         return `
         <label class="qr-print-item ${checked ? 'selected' : ''}">
-            <input type="checkbox" class="qr-print-checkbox" data-id="${p.id}" ${checked}>
+            <input type="checkbox" class="qr-print-checkbox" data-id="${esc(p.id)}" ${checked}>
             <div class="qr-print-item-info">
-                <span class="qr-print-item-name">${p.name || ''}</span>
-                <span class="qr-print-item-detail">${p.productId || ''} | ${p.category || ''} | SN: ${p.serialNumber || ''}</span>
+                <span class="qr-print-item-name">${esc(p.name)}</span>
+                <span class="qr-print-item-detail">${esc(p.productId)} | ${esc(p.category)} | SN: ${esc(p.serialNumber)}</span>
             </div>
         </label>`;
     }).join('');
@@ -2730,24 +2736,24 @@ function renderAdminHistory() {
         // 상세 정보
         let detail = '';
         if (item.type === '임대') {
-            detail = `→ ${item.company}`;
+            detail = `→ ${esc(item.company)}`;
         } else if (item.type === '임대회수') {
-            detail = `← ${item.company || ''} | ${item.previousRemaining || 0}h→${item.newRemaining || 0}h | ${item.status || ''}`;
+            detail = `← ${esc(item.company)} | ${item.previousRemaining || 0}h→${item.newRemaining || 0}h | ${esc(item.status)}`;
         } else if (item.type === '상태변경') {
-            detail = `${item.previousStatus || ''} → ${item.newStatus || ''}`;
+            detail = `${esc(item.previousStatus)} → ${esc(item.newStatus)}`;
         } else if (item.type === '제품등록' || item.type === '제품삭제') {
-            detail = item.productName || '';
+            detail = esc(item.productName);
         }
 
-        const userName = item.userName || '알 수 없음';
-        const userDept = item.userDepartment || '';
+        const userName = esc(item.userName || '알 수 없음');
+        const userDept = esc(item.userDepartment || '');
 
         return `
             <div class="admin-history-item">
                 <div class="history-user">${userDept} ${userName}</div>
                 <div class="history-action">
-                    <span class="history-type-badge ${badgeClass}">${item.type}</span>
-                    ${item.productName || ''} ${detail}
+                    <span class="history-type-badge ${badgeClass}">${esc(item.type)}</span>
+                    ${esc(item.productName)} ${detail}
                 </div>
                 <div class="history-time">${timeStr}</div>
             </div>
