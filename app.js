@@ -2101,7 +2101,8 @@ async function exportQRExcel() {
         for (const product of selectedProducts) {
             const qrRowNum = currentRow;
             const snRowNum = currentRow + 1;
-            const sn = product.serialNumber || product.productId || product.id;
+            const qrData = product.id; // QR 데이터: Firestore 문서 ID (스캔 시 이 값으로 검색)
+            const snLabel = product.serialNumber || product.productId || product.id; // 표시용 시리얼넘버
 
             // QR 행 (이미지용 - 높이 크게)
             const qrRow = sheet.getRow(qrRowNum);
@@ -2128,10 +2129,10 @@ async function exportQRExcel() {
                 const qrContainer = document.createElement('div');
                 tempDiv.appendChild(qrContainer);
                 new QRCode(qrContainer, {
-                    text: sn,
+                    text: qrData,
                     width: 256,
                     height: 256,
-                    correctLevel: QRCode.CorrectLevel.M
+                    correctLevel: QRCode.CorrectLevel.H
                 });
                 await new Promise(r => setTimeout(r, 120));
                 const qrCanvas = qrContainer.querySelector('canvas');
@@ -2175,7 +2176,7 @@ async function exportQRExcel() {
 
                 // 시리얼넘버 텍스트 셀
                 const snCell = snRow.getCell(c + 2);
-                snCell.value = sn;
+                snCell.value = snLabel;
                 snCell.font = { size: 9, color: { argb: 'FF333333' } };
                 snCell.alignment = { horizontal: 'center', vertical: 'middle' };
                 snCell.border = {
