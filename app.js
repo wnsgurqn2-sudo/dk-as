@@ -2058,9 +2058,11 @@ async function exportQRExcel() {
         const workbook = new ExcelJS.Workbook();
         const sheet = workbook.addWorksheet('QR 라벨');
 
-        // mm → 엑셀 포인트 변환 (1mm ≈ 2.83pt, 행높이는 pt, 열너비는 문자수 기준 약 7px/1width)
-        const qrSizePx = Math.round(labelHeight * 2.83); // QR 이미지 크기 (px 기준으로 사용)
-        const colWidthExcel = Math.max(Math.round(labelWidth / 2.5), 14); // 열 너비
+        // mm → 엑셀 단위 변환
+        const colWidthExcel = Math.max(Math.round(labelWidth / 2.5), 14); // 열 너비 (문자수)
+        const rowHeightPt = Math.max(Math.round(labelHeight * 2.2), 60); // 행 높이 (pt)
+        // QR 이미지 크기: 행 높이의 85%를 정사각형으로 (pt → px: *1.333)
+        const qrImgSize = Math.round(rowHeightPt * 1.333 * 0.85);
 
         // 1열: 제품명 (넓게)
         sheet.getColumn(1).width = 25;
@@ -2100,7 +2102,7 @@ async function exportQRExcel() {
 
             // QR 행 (이미지용 - 높이 크게)
             const qrRow = sheet.getRow(qrRowNum);
-            qrRow.height = Math.max(Math.round(labelHeight * 2.2), 60);
+            qrRow.height = rowHeightPt;
 
             // 제품명 셀 (2행 병합)
             sheet.mergeCells(qrRowNum, 1, snRowNum, 1);
@@ -2139,16 +2141,21 @@ async function exportQRExcel() {
             }
 
             // 매수만큼 가로로 QR 이미지 + 시리얼넘버 배치
-            const margin = 0.1; // 셀 양쪽 10% 여백 → 가운데 80% 영역에 이미지 배치
+            // 가로 중앙 오프셋 계산: 셀 너비(px) 대비 QR 이미지 비율
+            const colPx = colWidthExcel * 7.5;
+            const hMargin = colPx > qrImgSize ? (1 - qrImgSize / colPx) / 2 : 0;
+            // 세로 중앙 오프셋: 행 높이(px) 대비 QR 이미지 비율
+            const rowPx = rowHeightPt * 1.333;
+            const vMargin = rowPx > qrImgSize ? (1 - qrImgSize / rowPx) / 2 : 0;
             for (let c = 0; c < labelCount; c++) {
                 const colIdx = c + 1; // 0-based column index (0=A열=제품명, 1=B열=첫 QR)
 
-                // QR 이미지를 셀 가운데 배치 (tl+br 방식: 셀 범위 기준)
+                // QR 이미지를 셀 가운데 배치 (정사각형 유지)
                 if (qrBase64) {
                     const imageId = workbook.addImage({ base64: qrBase64, extension: 'png' });
                     sheet.addImage(imageId, {
-                        tl: { col: colIdx + margin, row: qrRowNum - 1 + 0.05 },
-                        br: { col: colIdx + 1 - margin, row: qrRowNum - 0.05 }
+                        tl: { col: colIdx + hMargin, row: qrRowNum - 1 + vMargin },
+                        ext: { width: qrImgSize, height: qrImgSize }
                     });
                 }
 
