@@ -2531,3 +2531,179 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // 전역 함수로 노출
 window.deleteProduct = deleteProduct;
+
+// ===== 테스트 데이터 생성 (관리자 전용) =====
+async function generateTestData() {
+    if (!isAdmin) { showToast('관리자만 사용 가능합니다.', 'error'); return; }
+    if (!confirm('50개 제품 + 각 10건 히스토리(임대5+회수5) + 사진을 생성합니다.\n시간이 다소 걸립니다. 계속하시겠습니까?')) return;
+
+    const progressEl = document.createElement('div');
+    progressEl.id = 'testProgress';
+    progressEl.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#1e3a5f;color:#fff;padding:12px 20px;z-index:99999;font-size:14px;text-align:center;';
+    document.body.appendChild(progressEl);
+    const updateProgress = (msg) => { progressEl.textContent = msg; console.log(msg); };
+
+    try {
+        // 1. 테스트 이미지 5개 생성 및 업로드 (한 번만)
+        updateProgress('테스트 이미지 생성 중...');
+        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7'];
+        const testPhotoUrls = [];
+        for (let c = 0; c < 5; c++) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 200; canvas.height = 150;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = colors[c];
+            ctx.fillRect(0, 0, 200, 150);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 20px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('TEST ' + (c + 1), 100, 80);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
+            const ref = storageInstance.ref(`photos/test/test_img_${c}`);
+            await ref.putString(dataUrl, 'data_url');
+            testPhotoUrls.push(await ref.getDownloadURL());
+            updateProgress(`테스트 이미지 업로드 ${c + 1}/5`);
+        }
+
+        // 2. 50개 제품 생성
+        const categories = ['에어컨', '제습기', '공기청정기', '히터', '선풍기'];
+        const companies = ['삼성전자', 'LG전자', '대우', '위닉스', '쿠쿠', '코웨이', '신일', '한일', '캐리어', '센추리'];
+        const testProducts = [];
+
+        updateProgress('제품 50개 생성 중...');
+        const productBatch = db.batch();
+        for (let i = 1; i <= 50; i++) {
+            const cat = categories[Math.floor(Math.random() * categories.length)];
+            const id = `T${String(i).padStart(3, '0')}`;
+            const hours = Math.floor(Math.random() * 2000) + 500;
+            const sn = generateSerialNumber();
+            const product = {
+                id, name: `${cat} ${String.fromCharCode(65 + (i % 26))}${Math.floor(i / 26)}형`,
+                category: cat, totalHours: hours, remainingHours: hours,
+                note: '', status: '미점검', isRented: false,
+                rentalCompany: null, rentalDate: null,
+                serialNumber: sn,
+                createdAt: new Date().toISOString(),
+                lastUpdated: new Date().toISOString()
+            };
+            testProducts.push(product);
+            productBatch.set(db.collection('products').doc(id), product);
+        }
+        await productBatch.commit();
+        updateProgress('제품 50개 등록 완료');
+
+        // 3. 각 제품별 히스토리 생성 (임대 5회 + 회수 5회)
+        const now = Date.now();
+        let historyCount = 0;
+        const totalHistory = 50 * 10;
+
+        for (let p = 0; p < 50; p++) {
+            const prod = testProducts[p];
+            const batch = db.batch();
+
+            for (let r = 0; r < 5; r++) {
+                const rentalTime = new Date(now - (50 - p) * 86400000 - (5 - r) * 7200000).toISOString();
+                const returnTime = new Date(now - (50 - p) * 86400000 - (5 - r) * 7200000 + 3600000).toISOString();
+                const company = companies[Math.floor(Math.random() * companies.length)];
+                const usedHours = Math.floor(Math.random() * 100) + 10;
+
+                // 임대 기록
+                const rentalRef = db.collection('history').doc();
+                batch.set(rentalRef, {
+                    type: '임대', productId: prod.id, productName: prod.name,
+                    company, time: rentalTime,
+                    rentalPhotos: testPhotoUrls,
+                    userId: currentUser.uid, userName: currentUserProfile.name,
+                    userDepartment: currentUserProfile.department, userEmail: currentUser.email
+                });
+
+                // 회수 기록
+                const returnRef = db.collection('history').doc();
+                batch.set(returnRef, {
+                    type: '임대회수', productId: prod.id, productName: prod.name,
+                    company, returnStatus: STATUS_TYPES[Math.floor(Math.random() * STATUS_TYPES.length)],
+                    usedHours, note: r === 0 ? '테스트 특이사항' : '',
+                    time: returnTime,
+                    returnPhotos: testPhotoUrls,
+                    userId: currentUser.uid, userName: currentUserProfile.name,
+                    userDepartment: currentUserProfile.department, userEmail: currentUser.email
+                });
+
+                historyCount += 2;
+            }
+
+            await batch.commit();
+            updateProgress(`히스토리 생성 중... ${p + 1}/50 제품 (${historyCount}/${totalHistory}건)`);
+        }
+
+        // 4. 데이터 새로고침
+        updateProgress('데이터 새로고침 중...');
+        await loadData();
+        updateDashboard();
+        updateProductList();
+        updateAutoCompleteSuggestions();
+
+        progressEl.style.background = '#10b981';
+        updateProgress(`완료! 제품 50개 + 히스토리 ${historyCount}건 + 사진 URL ${historyCount * 5}개 생성됨`);
+        setTimeout(() => progressEl.remove(), 5000);
+
+    } catch (e) {
+        console.error('테스트 데이터 생성 오류:', e);
+        progressEl.style.background = '#ef4444';
+        updateProgress('오류: ' + e.message);
+        setTimeout(() => progressEl.remove(), 10000);
+    }
+}
+
+// 테스트 데이터 삭제
+async function deleteTestData() {
+    if (!isAdmin) { showToast('관리자만 사용 가능합니다.', 'error'); return; }
+    if (!confirm('T001~T050 테스트 제품과 관련 히스토리를 모두 삭제합니다. 계속하시겠습니까?')) return;
+
+    const progressEl = document.createElement('div');
+    progressEl.id = 'testProgress';
+    progressEl.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#ef4444;color:#fff;padding:12px 20px;z-index:99999;font-size:14px;text-align:center;';
+    document.body.appendChild(progressEl);
+    const updateProgress = (msg) => { progressEl.textContent = msg; };
+
+    try {
+        // 제품 삭제
+        updateProgress('테스트 제품 삭제 중...');
+        for (let i = 1; i <= 50; i++) {
+            const id = `T${String(i).padStart(3, '0')}`;
+            await db.collection('products').doc(id).delete();
+        }
+
+        // 히스토리 삭제 (T001~T050 관련)
+        updateProgress('히스토리 삭제 중...');
+        for (let i = 1; i <= 50; i++) {
+            const id = `T${String(i).padStart(3, '0')}`;
+            const snap = await db.collection('history').where('productId', '==', id).get();
+            const batch = db.batch();
+            snap.forEach(doc => batch.delete(doc.ref));
+            if (!snap.empty) await batch.commit();
+            updateProgress(`히스토리 삭제 중... ${i}/50`);
+        }
+
+        // Storage 테스트 이미지 삭제
+        updateProgress('테스트 이미지 삭제 중...');
+        for (let c = 0; c < 5; c++) {
+            try { await storageInstance.ref(`photos/test/test_img_${c}`).delete(); } catch(e) {}
+        }
+
+        await loadData();
+        updateDashboard();
+        updateProductList();
+
+        progressEl.style.background = '#10b981';
+        updateProgress('테스트 데이터 삭제 완료!');
+        setTimeout(() => progressEl.remove(), 3000);
+    } catch (e) {
+        console.error('삭제 오류:', e);
+        updateProgress('오류: ' + e.message);
+        setTimeout(() => progressEl.remove(), 10000);
+    }
+}
+
+window.generateTestData = generateTestData;
+window.deleteTestData = deleteTestData;
