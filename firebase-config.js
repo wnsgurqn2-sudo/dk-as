@@ -61,4 +61,6 @@ const firebaseConfig = {
 };
 
 // 총책임자 이메일
-const ADMIN_EMAIL = 'wnsgurqn2@gmail.com';
+const SUPER_ADMIN_EMAIL = 'wnsgurqn2@gmail.com';
+// 역할 상수
+const ROLE = { SUPER_ADMIN: 'superadmin', ADMIN: 'admin', USER: 'user' };

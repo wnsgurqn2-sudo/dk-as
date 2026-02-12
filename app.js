@@ -13,6 +13,8 @@ let storageInstance = null;
 let currentUser = null;
 let currentUserProfile = null;
 let isAdmin = false;
+let isSuperAdmin = false;
+let userRole = ROLE.USER;
 
 // ===== 시리얼넘버 생성 =====
 function generateSerialNumber() {
@@ -110,6 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initScanActions();
     initSettings();
     initUserManage();
+    initQRPrint();
 });
 
 // ===== 인증 관리 =====
@@ -121,12 +124,16 @@ function initAuth() {
                 const userDoc = await db.collection('users').doc(user.uid).get();
                 if (userDoc.exists) {
                     currentUserProfile = userDoc.data();
-                    isAdmin = user.email === ADMIN_EMAIL;
+                    isSuperAdmin = user.email === SUPER_ADMIN_EMAIL;
+                    userRole = currentUserProfile.role || ROLE.USER;
+                    isAdmin = isSuperAdmin || userRole === ROLE.ADMIN;
 
-                    // 관리자는 항상 승인됨
-                    if (isAdmin && !currentUserProfile.approved) {
-                        await db.collection('users').doc(user.uid).update({ approved: true });
+                    // 총책임자는 항상 superadmin + 승인됨
+                    if (isSuperAdmin && (userRole !== ROLE.SUPER_ADMIN || !currentUserProfile.approved)) {
+                        await db.collection('users').doc(user.uid).update({ approved: true, role: ROLE.SUPER_ADMIN });
                         currentUserProfile.approved = true;
+                        currentUserProfile.role = ROLE.SUPER_ADMIN;
+                        userRole = ROLE.SUPER_ADMIN;
                     }
 
                     // 미승인 사용자 차단
@@ -140,6 +147,8 @@ function initAuth() {
                     updateHeaderUserInfo();
                     if (isAdmin) {
                         document.getElementById('adminHistoryTab').style.display = '';
+                    }
+                    if (isSuperAdmin) {
                         document.getElementById('userManageItem').style.display = '';
                     }
                     await loadData();
@@ -217,9 +226,11 @@ async function completeProfile() {
     try {
         btn.disabled = true;
         btn.textContent = '저장 중...';
-        isAdmin = currentUser.email === ADMIN_EMAIL;
-        const approved = isAdmin; // 관리자만 자동 승인
-        currentUserProfile = { email: currentUser.email, name, department, approved };
+        isSuperAdmin = currentUser.email === SUPER_ADMIN_EMAIL;
+        userRole = isSuperAdmin ? ROLE.SUPER_ADMIN : ROLE.USER;
+        isAdmin = isSuperAdmin;
+        const approved = isSuperAdmin; // 총책임자만 자동 승인
+        currentUserProfile = { email: currentUser.email, name, department, approved, role: userRole };
         await db.collection('users').doc(currentUser.uid).set({
             ...currentUserProfile,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -232,8 +243,8 @@ async function completeProfile() {
             hideLoginScreen();
             hidePendingApproval();
             updateHeaderUserInfo();
-            document.getElementById('adminHistoryTab').style.display = '';
-            document.getElementById('userManageItem').style.display = '';
+            if (isAdmin) document.getElementById('adminHistoryTab').style.display = '';
+            if (isSuperAdmin) document.getElementById('userManageItem').style.display = '';
             await loadData();
             updateDashboard();
             updateProductList();
@@ -301,7 +312,7 @@ async function loadUserList() {
             const data = doc.data();
             const user = { id: doc.id, ...data };
             // 관리자는 별도 표시하지 않음
-            if (data.email === ADMIN_EMAIL) return;
+            if (data.email === SUPER_ADMIN_EMAIL) return;
             if (data.approved) {
                 approvedUsers.push(user);
             } else {
@@ -331,6 +342,10 @@ function renderPendingUsers(users) {
                 <div class="user-manage-email">${u.email || ''}</div>
             </div>
             <div class="user-manage-actions">
+                <select class="role-select" id="roleSelect_${u.id}">
+                    <option value="${ROLE.USER}">사용자</option>
+                    <option value="${ROLE.ADMIN}">관리자</option>
+                </select>
                 <button class="btn-approve" onclick="approveUser('${u.id}')">승인</button>
                 <button class="btn-reject" onclick="removeUser('${u.id}')">거부</button>
             </div>
@@ -345,26 +360,46 @@ function renderApprovedUsers(users) {
         container.innerHTML = '<div class="empty-state">승인된 사용자가 없습니다.</div>';
         return;
     }
-    container.innerHTML = users.map(u => `
+    container.innerHTML = users.map(u => {
+        const role = u.role || ROLE.USER;
+        const roleLabel = role === ROLE.ADMIN ? '관리자' : '사용자';
+        return `
         <div class="user-manage-item">
             <div class="user-manage-info">
-                <div class="user-manage-name">${u.department || ''} ${u.name || ''}</div>
+                <div class="user-manage-name">${u.department || ''} ${u.name || ''} <span class="role-badge role-${role}">${roleLabel}</span></div>
                 <div class="user-manage-email">${u.email || ''}</div>
             </div>
             <div class="user-manage-actions">
+                <select class="role-select" id="roleSelect_${u.id}" onchange="changeUserRole('${u.id}', this.value)">
+                    <option value="${ROLE.USER}" ${role === ROLE.USER ? 'selected' : ''}>사용자</option>
+                    <option value="${ROLE.ADMIN}" ${role === ROLE.ADMIN ? 'selected' : ''}>관리자</option>
+                </select>
                 <button class="btn-reject" onclick="removeUser('${u.id}')">제거</button>
             </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
 async function approveUser(userId) {
     try {
-        await db.collection('users').doc(userId).update({ approved: true });
-        showToast('사용자를 승인했습니다.', 'success');
+        const roleSelect = document.getElementById('roleSelect_' + userId);
+        const role = roleSelect ? roleSelect.value : ROLE.USER;
+        await db.collection('users').doc(userId).update({ approved: true, role });
+        showToast('사용자를 승인했습니다. (' + (role === ROLE.ADMIN ? '관리자' : '사용자') + ')', 'success');
         loadUserList();
     } catch (e) {
         showToast('승인 실패: ' + e.message, 'error');
+    }
+}
+
+async function changeUserRole(userId, newRole) {
+    try {
+        await db.collection('users').doc(userId).update({ role: newRole });
+        showToast('역할이 변경되었습니다. (' + (newRole === ROLE.ADMIN ? '관리자' : '사용자') + ')', 'success');
+        loadUserList();
+    } catch (e) {
+        showToast('역할 변경 실패: ' + e.message, 'error');
     }
 }
 
@@ -382,8 +417,9 @@ async function removeUser(userId) {
 function updateHeaderUserInfo() {
     if (currentUserProfile) {
         document.getElementById('headerUserInfo').style.display = 'block';
+        const roleLabel = isSuperAdmin ? ' (총책임자)' : (userRole === ROLE.ADMIN ? ' (관리자)' : '');
         document.getElementById('headerUserName').textContent =
-            `${currentUserProfile.department} ${currentUserProfile.name}${isAdmin ? ' (관리자)' : ''}`;
+            `${currentUserProfile.department} ${currentUserProfile.name}${roleLabel}`;
         document.getElementById('settingsUserLabel').textContent =
             `${currentUserProfile.name} (${currentUserProfile.department})`;
     }
@@ -1889,6 +1925,236 @@ function updateQRProductSelect() {
 
 function updateQRSheetProductList() {
     // QR생성 탭 삭제로 더 이상 사용하지 않음
+}
+
+// ===== QR 프린트 기능 =====
+let qrPrintSelectedIds = new Set();
+
+function initQRPrint() {
+    const modal = document.getElementById('qrPrintModal');
+    const closeBtn = document.getElementById('qrPrintClose');
+    const backBtn = document.getElementById('qrPrintBack');
+
+    document.getElementById('btnQRPrint').addEventListener('click', openQRPrintModal);
+    closeBtn.addEventListener('click', () => modal.classList.remove('show'));
+    backBtn.addEventListener('click', () => modal.classList.remove('show'));
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
+
+    // 실시간 검색
+    document.getElementById('qrPrintSearch').addEventListener('input', renderQRPrintList);
+
+    // 전체선택/전체해제
+    document.getElementById('btnSelectAll').addEventListener('click', () => {
+        const keyword = document.getElementById('qrPrintSearch').value.trim().toLowerCase();
+        getFilteredQRProducts(keyword).forEach(p => qrPrintSelectedIds.add(p.id));
+        renderQRPrintList();
+    });
+    document.getElementById('btnDeselectAll').addEventListener('click', () => {
+        qrPrintSelectedIds.clear();
+        renderQRPrintList();
+    });
+
+    // 엑셀 내보내기
+    document.getElementById('btnExportQRExcel').addEventListener('click', exportQRExcel);
+}
+
+function openQRPrintModal() {
+    qrPrintSelectedIds.clear();
+    document.getElementById('qrPrintSearch').value = '';
+    document.getElementById('qrPrintModal').classList.add('show');
+    renderQRPrintList();
+}
+
+function getFilteredQRProducts(keyword) {
+    if (!keyword) return products;
+    return products.filter(p =>
+        (p.name || '').toLowerCase().includes(keyword) ||
+        (p.productId || '').toLowerCase().includes(keyword) ||
+        (p.category || '').toLowerCase().includes(keyword) ||
+        (p.serialNumber || '').toLowerCase().includes(keyword)
+    );
+}
+
+function renderQRPrintList() {
+    const keyword = document.getElementById('qrPrintSearch').value.trim().toLowerCase();
+    const filtered = getFilteredQRProducts(keyword);
+    const container = document.getElementById('qrPrintList');
+    const settingsDiv = document.getElementById('qrPrintSettings');
+    const exportBtn = document.getElementById('btnExportQRExcel');
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<div class="empty-state">등록된 제품이 없습니다.</div>';
+        settingsDiv.style.display = 'none';
+        exportBtn.disabled = true;
+        document.getElementById('qrPrintSelectedCount').textContent = '0';
+        return;
+    }
+
+    container.innerHTML = filtered.map(p => {
+        const checked = qrPrintSelectedIds.has(p.id) ? 'checked' : '';
+        return `
+        <label class="qr-print-item ${checked ? 'selected' : ''}">
+            <input type="checkbox" class="qr-print-checkbox" data-id="${p.id}" ${checked}>
+            <div class="qr-print-item-info">
+                <span class="qr-print-item-name">${p.name || ''}</span>
+                <span class="qr-print-item-detail">${p.productId || ''} | ${p.category || ''} | SN: ${p.serialNumber || ''}</span>
+            </div>
+        </label>`;
+    }).join('');
+
+    // 체크박스 이벤트
+    container.querySelectorAll('.qr-print-checkbox').forEach(cb => {
+        cb.addEventListener('change', (e) => {
+            const id = e.target.dataset.id;
+            if (e.target.checked) {
+                qrPrintSelectedIds.add(id);
+            } else {
+                qrPrintSelectedIds.delete(id);
+            }
+            updateQRPrintSelectionUI();
+        });
+    });
+
+    updateQRPrintSelectionUI();
+}
+
+function updateQRPrintSelectionUI() {
+    const count = qrPrintSelectedIds.size;
+    document.getElementById('qrPrintSelectedCount').textContent = count;
+    document.getElementById('qrPrintSettings').style.display = count > 0 ? 'block' : 'none';
+    document.getElementById('btnExportQRExcel').disabled = count === 0;
+
+    // 선택된 항목 시각적 표시
+    document.querySelectorAll('.qr-print-item').forEach(item => {
+        const cb = item.querySelector('.qr-print-checkbox');
+        if (cb) {
+            item.classList.toggle('selected', cb.checked);
+        }
+    });
+}
+
+async function exportQRExcel() {
+    const selectedProducts = products.filter(p => qrPrintSelectedIds.has(p.id));
+    if (selectedProducts.length === 0) {
+        showToast('선택된 제품이 없습니다.', 'error');
+        return;
+    }
+
+    const labelWidth = parseInt(document.getElementById('qrLabelWidth').value) || 50;
+    const labelHeight = parseInt(document.getElementById('qrLabelHeight').value) || 30;
+    const labelCount = parseInt(document.getElementById('qrLabelCount').value) || 1;
+
+    const btn = document.getElementById('btnExportQRExcel');
+    btn.disabled = true;
+    btn.textContent = '생성 중...';
+
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('QR 라벨');
+
+        // 열 설정
+        sheet.columns = [
+            { header: 'No', key: 'no', width: 6 },
+            { header: '제품ID', key: 'productId', width: 15 },
+            { header: '제품명', key: 'name', width: 25 },
+            { header: '카테고리', key: 'category', width: 15 },
+            { header: '시리얼넘버', key: 'serialNumber', width: 18 },
+            { header: 'QR코드', key: 'qr', width: 20 },
+            { header: '라벨 가로(mm)', key: 'width', width: 14 },
+            { header: '라벨 세로(mm)', key: 'height', width: 14 },
+            { header: '매수', key: 'count', width: 8 }
+        ];
+
+        // 헤더 스타일
+        sheet.getRow(1).eachCell(cell => {
+            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } };
+            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            cell.border = {
+                top: { style: 'thin' }, bottom: { style: 'thin' },
+                left: { style: 'thin' }, right: { style: 'thin' }
+            };
+        });
+
+        // QR 코드 생성용 임시 캔버스
+        const tempDiv = document.createElement('div');
+        tempDiv.style.cssText = 'position:absolute;left:-9999px;top:-9999px;';
+        document.body.appendChild(tempDiv);
+
+        let rowNum = 1;
+        for (const product of selectedProducts) {
+            rowNum++;
+            const row = sheet.addRow({
+                no: rowNum - 1,
+                productId: product.productId || '',
+                name: product.name || '',
+                category: product.category || '',
+                serialNumber: product.serialNumber || '',
+                qr: '',
+                width: labelWidth,
+                height: labelHeight,
+                count: labelCount
+            });
+
+            // 행 높이 설정 (QR 코드 표시용)
+            row.height = 80;
+            row.eachCell(cell => {
+                cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+                cell.border = {
+                    top: { style: 'thin' }, bottom: { style: 'thin' },
+                    left: { style: 'thin' }, right: { style: 'thin' }
+                };
+            });
+
+            // QR코드 이미지 생성
+            try {
+                const qrContainer = document.createElement('div');
+                tempDiv.appendChild(qrContainer);
+                const qr = new QRCode(qrContainer, {
+                    text: product.serialNumber || product.productId || product.id,
+                    width: 128,
+                    height: 128,
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+
+                // QRCode 라이브러리가 비동기로 이미지를 생성하므로 잠시 대기
+                await new Promise(r => setTimeout(r, 100));
+
+                const canvas = qrContainer.querySelector('canvas');
+                if (canvas) {
+                    const base64 = canvas.toDataURL('image/png').split(',')[1];
+                    const imageId = workbook.addImage({ base64, extension: 'png' });
+                    sheet.addImage(imageId, {
+                        tl: { col: 5, row: rowNum - 1 },
+                        ext: { width: 75, height: 75 }
+                    });
+                }
+                tempDiv.removeChild(qrContainer);
+            } catch (qrErr) {
+                console.warn('QR 생성 실패:', product.productId, qrErr);
+            }
+        }
+
+        document.body.removeChild(tempDiv);
+
+        // 파일 다운로드
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `QR_라벨_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        showToast(`${selectedProducts.length}개 제품의 QR 라벨 엑셀이 다운로드되었습니다.`, 'success');
+    } catch (e) {
+        console.error('엑셀 내보내기 실패:', e);
+        showToast('엑셀 내보내기 실패: ' + e.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '엑셀 내보내기';
+    }
 }
 
 // ===== 유틸리티 =====
