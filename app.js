@@ -676,6 +676,14 @@ function saveData() {
     });
 }
 
+// 단일 제품만 Firestore에 저장 (빠른 저장)
+function saveProduct(product) {
+    return db.collection('products').doc(product.id).set(product).catch(e => {
+        console.error('제품 저장 오류:', e);
+        showToast('저장 중 오류가 발생했습니다.', 'error');
+    });
+}
+
 async function deleteProductFromFirestore(productId) {
     try {
         await db.collection('products').doc(productId).delete();
@@ -698,19 +706,20 @@ async function deleteAllProductsFromFirestore() {
 // ===== Firebase Storage 사진 업로드 =====
 async function uploadPhotosToStorage(photoBase64Array, productId, type) {
     if (!photoBase64Array || photoBase64Array.length === 0) return [];
-    const urls = [];
     const timestamp = Date.now();
-    for (let i = 0; i < photoBase64Array.length; i++) {
+    // 병렬 업로드
+    const promises = photoBase64Array.map(async (photo, i) => {
         try {
             const ref = storageInstance.ref(`photos/${productId}/${type}_${timestamp}_${i}`);
-            await ref.putString(photoBase64Array[i], 'data_url');
-            const url = await ref.getDownloadURL();
-            urls.push(url);
+            await ref.putString(photo, 'data_url');
+            return await ref.getDownloadURL();
         } catch (e) {
             console.error(`사진 업로드 오류 (${i}):`, e);
+            return null;
         }
-    }
-    return urls;
+    });
+    const results = await Promise.all(promises);
+    return results.filter(url => url !== null);
 }
 
 // ===== 탭 관리 =====
@@ -1054,7 +1063,7 @@ function initScanActions() {
                 products[productIndex].rentalCompany = company;
                 products[productIndex].rentalDate = new Date().toISOString();
                 products[productIndex].currentRentalIndex = products[productIndex].rentalHistory.length - 1;
-                saveData();
+                saveProduct(products[productIndex]);
 
                 // 기록 추가
                 addHistory({
@@ -1182,7 +1191,7 @@ function initScanActions() {
                 products[productIndex].rentalDate = null;
                 products[productIndex].currentRentalIndex = null;
 
-                saveData();
+                saveProduct(products[productIndex]);
                 addHistory(returnRecord);
 
                 showToast(`${currentScannedProduct.name} 회수 완료 - 실사용: ${usedHours}h, ${selectedReturnStatus}`, 'success');
@@ -1254,7 +1263,7 @@ function initScanActions() {
                 products[productIndex].lastUpdated = new Date().toISOString();
                 products[productIndex].lastNote = note;
 
-                saveData();
+                saveProduct(products[productIndex]);
 
                 addHistory({
                     type: '상태변경',
@@ -1417,7 +1426,7 @@ function initProductForm() {
         };
 
         products.push(product);
-        saveData();
+        saveProduct(product);
         form.reset();
 
         // 제품등록 기록 추가
@@ -2417,7 +2426,7 @@ function initEditProductModal() {
                 products[productIndex].reservedDate = null;
             }
 
-            saveData();
+            saveProduct(products[productIndex]);
 
             // 상태가 변경된 경우에만 기록 추가
             if (previousStatus !== newStatus) {
@@ -2568,7 +2577,7 @@ function deleteRentalRecord(productId, index) {
         const product = products.find(p => p.id === productId);
         if (product && product.rentalHistory && product.rentalHistory[index]) {
             product.rentalHistory.splice(index, 1);
-            saveData();
+            saveProduct(product);
             // 삭제 후 임대기록 모달 다시 열기
             showRentalHistory(productId);
             updateDashboard();
