@@ -142,6 +142,12 @@ function initAuth() {
                         userRole = ROLE.SUPER_ADMIN;
                     }
 
+                    // role 필드 누락된 기존 사용자 자동 보정
+                    if (!isSuperAdmin && !currentUserProfile.role && currentUserProfile.approved) {
+                        await db.collection('users').doc(user.uid).update({ role: ROLE.USER });
+                        currentUserProfile.role = ROLE.USER;
+                    }
+
                     // 미승인 사용자 차단
                     if (!currentUserProfile.approved) {
                         showPendingApproval();
