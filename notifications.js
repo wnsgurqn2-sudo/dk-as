@@ -23,10 +23,6 @@ async function initNotifications() {
     try {
         messagingInstance = firebase.messaging();
 
-        // Firebase Messaging 서비스워커 등록
-        const registration = await navigator.serviceWorker.register("./firebase-messaging-sw.js");
-        console.log("Firebase Messaging SW registered:", registration.scope);
-
         // 포그라운드 메시지 수신 (앱이 열려있을 때)
         messagingInstance.onMessage((payload) => {
             const title = payload.data?.title || payload.notification?.title;
@@ -49,9 +45,14 @@ async function requestNotificationPermission() {
         const permission = await Notification.requestPermission();
 
         if (permission === "granted") {
+            // firebase-messaging-sw.js로 등록된 SW를 찾거나, 기본 SW 사용
+            let swReg = await navigator.serviceWorker.getRegistration("./firebase-messaging-sw.js");
+            if (!swReg) {
+                swReg = await navigator.serviceWorker.getRegistration();
+            }
             const token = await messagingInstance.getToken({
                 vapidKey: VAPID_KEY,
-                serviceWorkerRegistration: await navigator.serviceWorker.getRegistration("./firebase-messaging-sw.js")
+                serviceWorkerRegistration: swReg
             });
 
             if (token) {
