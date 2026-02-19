@@ -68,7 +68,6 @@ self.addEventListener('install', (event) => {
         console.log('캐시 실패:', error);
       })
   );
-  self.skipWaiting();
 });
 
 // 활성화 시 이전 캐시 삭제

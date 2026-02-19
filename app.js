@@ -151,6 +151,12 @@ function initAuth() {
                     hideLoginScreen();
                     hidePendingApproval();
                     updateHeaderUserInfo();
+
+                    // 권한별 UI 초기화 (먼저 모두 숨기고 조건부 표시)
+                    document.getElementById('adminHistoryTab').style.display = 'none';
+                    document.getElementById('userManageItem').style.display = 'none';
+                    document.getElementById('notifManageItem').style.display = 'none';
+
                     if (isAdmin) {
                         document.getElementById('adminHistoryTab').style.display = '';
                     }
@@ -185,8 +191,18 @@ function initAuth() {
             currentUser = null;
             currentUserProfile = null;
             isAdmin = false;
+            isSuperAdmin = false;
+            userRole = ROLE.USER;
             products = [];
             history = [];
+
+            // 관리자/총책임자 전용 UI 숨기기
+            document.getElementById('adminHistoryTab').style.display = 'none';
+            document.getElementById('userManageItem').style.display = 'none';
+            document.getElementById('notifManageItem').style.display = 'none';
+            const notifPermItem = document.getElementById('notifPermItem');
+            if (notifPermItem) notifPermItem.remove();
+
             showLoginScreen();
         }
     });

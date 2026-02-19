@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 제품
+    match /products/{productId} {
+      allow read, write: if request.auth != null;
+    }
+    // 히스토리
+    match /history/{historyId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    // 사용자
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && (request.auth.uid == userId || request.auth.token.email == 'wnsgurqn2@gmail.com');
+
+      // FCM 토큰 (사용자 본인만)
+      match /fcmTokens/{tokenId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+    // 알림 (로그인 사용자 생성, Cloud Functions에서 처리)
+    match /notifications/{notificationId} {
+      allow create: if request.auth != null;
+      allow read, update, delete: if false;
+    }
+  }
+}
