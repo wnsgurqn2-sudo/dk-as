@@ -20,13 +20,14 @@
     <link rel="icon" type="image/png" sizes="72x72" href="icons/icon-72x72.png">
     <link rel="apple-touch-icon" href="icons/icon-72x72.png">
 
-    <link rel="stylesheet" href="styles.css?v=53">
+    <link rel="stylesheet" href="styles.css?v=54">
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
-    <script src="firebase-config.js?v=53"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js"></script>
+    <script src="firebase-config.js?v=54"></script>
     <!-- QR Code 스캔 라이브러리 -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <!-- QR Code 생성 라이브러리 -->
@@ -66,6 +67,10 @@
                 <div class="settings-item" id="userManageItem" style="display: none; margin-top: 8px;">
                     <span class="settings-label">사용자 관리</span>
                     <button class="view-btn active" id="userManageBtn" style="background: #8b5cf6; color: #fff;">승인설정</button>
+                </div>
+                <div class="settings-item" id="notifManageItem" style="display: none; margin-top: 8px;">
+                    <span class="settings-label">알림 관리</span>
+                    <button class="view-btn active" id="notifManageBtn" style="background: #FF9800; color: #fff;">알림설정</button>
                 </div>
                 <div class="settings-item" style="margin-top: 8px;">
                     <span class="settings-label" id="settingsUserLabel"></span>
@@ -658,7 +663,51 @@
         </div>
     </div>
 
-    <script src="app.js?v=53"></script>
+    <!-- 알림 설정 모달 (총책임자 전용) -->
+    <div class="modal-overlay" id="notifSettingsModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>알림 설정</h3>
+                <button class="modal-close" id="notifSettingsClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="notifSettingsUserName" style="font-weight:600; margin-bottom:12px;"></p>
+                <div class="notif-settings-list" id="notifSettingsList">
+                    <label class="notif-toggle-item">
+                        <span>임대 알림</span>
+                        <input type="checkbox" data-type="rental" checked>
+                    </label>
+                    <label class="notif-toggle-item">
+                        <span>임대회수 알림</span>
+                        <input type="checkbox" data-type="return" checked>
+                    </label>
+                    <label class="notif-toggle-item">
+                        <span>상태변경 알림</span>
+                        <input type="checkbox" data-type="status_change" checked>
+                    </label>
+                    <label class="notif-toggle-item">
+                        <span>외주요청 알림</span>
+                        <input type="checkbox" data-type="outsource_request" checked>
+                    </label>
+                    <label class="notif-toggle-item">
+                        <span>제품등록 알림</span>
+                        <input type="checkbox" data-type="product_registered" checked>
+                    </label>
+                    <label class="notif-toggle-item">
+                        <span>제품삭제 알림</span>
+                        <input type="checkbox" data-type="product_deleted" checked>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="notifSettingsCancel">취소</button>
+                <button class="btn-primary" id="notifSettingsSave">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="notifications.js?v=54"></script>
+    <script src="app.js?v=54"></script>
     <script>
         // Service Worker 등록 및 강제 업데이트
         if ('serviceWorker' in navigator) {

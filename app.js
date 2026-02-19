@@ -156,6 +156,7 @@ function initAuth() {
                     }
                     if (isSuperAdmin) {
                         document.getElementById('userManageItem').style.display = '';
+                        document.getElementById('notifManageItem').style.display = '';
                     }
                     await loadData();
                     updateDashboard();
@@ -164,6 +165,14 @@ function initAuth() {
                     updateQRSheetProductList();
                     updateNextProductId();
                     updateAutoCompleteSuggestions();
+
+                    // 푸시 알림 초기화
+                    if (typeof initNotifications === 'function') {
+                        await initNotifications();
+                    }
+                    if (typeof renderNotificationButton === 'function') {
+                        renderNotificationButton();
+                    }
                 } else {
                     // 프로필 미등록 (Google 로그인 최초) → 프로필 완성 폼 표시
                     showProfileCompleteForm();
@@ -1077,6 +1086,10 @@ function initScanActions() {
                     time: new Date().toISOString()
                 });
 
+                if (typeof createNotification === 'function') {
+                    createNotification('rental', currentScannedProduct.name, { company: company });
+                }
+
                 showToast(`${currentScannedProduct.name} - ${company} 임대 완료`, 'success');
                 updateDashboard();
             }
@@ -1196,6 +1209,10 @@ function initScanActions() {
 
                 saveProduct(products[productIndex]);
                 addHistory(returnRecord);
+
+                if (typeof createNotification === 'function') {
+                    createNotification('return', currentScannedProduct.name, { status: selectedReturnStatus });
+                }
 
                 showToast(`${currentScannedProduct.name} 회수 완료 - 실사용: ${usedHours}h, ${selectedReturnStatus}`, 'success');
                 updateDashboard();
@@ -1325,6 +1342,13 @@ function initScanActions() {
                     note: note,
                     time: new Date().toISOString()
                 });
+
+                if (typeof createNotification === 'function') {
+                    createNotification('status_change', currentScannedProduct.name, { newStatus: selectedChangeStatus });
+                    if (selectedChangeStatus === '수리중' && outsourceRequested) {
+                        createNotification('outsource_request', currentScannedProduct.name, {});
+                    }
+                }
 
                 showToast(`${currentScannedProduct.name} 상태 변경: ${selectedChangeStatus}`, 'success');
                 updateDashboard();
@@ -1492,6 +1516,10 @@ function initProductForm() {
             time: new Date().toISOString()
         });
 
+        if (typeof createNotification === 'function') {
+            createNotification('product_registered', product.name, {});
+        }
+
         updateDashboard();
         updateProductList();
         updateQRProductSelect();
@@ -1565,6 +1593,10 @@ function initBulkRegister() {
         updateQRProductSelect();
         updateQRSheetProductList();
 
+        if (addedCount > 0 && typeof createNotification === 'function') {
+            createNotification('product_registered', `${addedCount}개 제품 일괄등록`, {});
+        }
+
         showToast(`${addedCount}개 등록 완료 (${skippedCount}개 건너뜀)`, 'success');
     });
 }
@@ -1592,6 +1624,10 @@ function initDeleteAll() {
                     productName: `전체 ${count}개 제품`,
                     time: new Date().toISOString()
                 });
+
+                if (typeof createNotification === 'function') {
+                    createNotification('product_deleted', `전체 ${count}개 제품`, {});
+                }
 
                 updateDashboard();
                 updateProductList();
@@ -1652,6 +1688,148 @@ function initSettings() {
             dropdown.classList.remove('show');
         }
     });
+
+    // 알림 관리 버튼 (총책임자 전용)
+    document.getElementById('notifManageBtn').addEventListener('click', () => {
+        dropdown.classList.remove('show');
+        openNotifManageModal();
+    });
+
+    // 알림 설정 모달 닫기/취소
+    document.getElementById('notifSettingsClose').addEventListener('click', () => {
+        document.getElementById('notifSettingsModal').classList.remove('show');
+    });
+    document.getElementById('notifSettingsCancel').addEventListener('click', () => {
+        document.getElementById('notifSettingsModal').classList.remove('show');
+    });
+    document.getElementById('notifSettingsSave').addEventListener('click', saveNotifSettings);
+}
+
+// ===== 알림 설정 (총책임자 전용) =====
+let currentNotifSettingsUid = null;
+
+async function openNotifManageModal() {
+    // 승인된 사용자 목록에서 알림 설정 가능한 사용자를 표시
+    try {
+        const snapshot = await db.collection('users').get();
+        const approvedUsers = [];
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.approved) {
+                approvedUsers.push({ id: doc.id, ...data });
+            }
+        });
+
+        let html = '<div style="margin-bottom:12px;font-size:13px;color:#666;">각 사용자의 알림 수신 설정을 관리합니다.</div>';
+        approvedUsers.forEach(u => {
+            const roleLabel = u.role === ROLE.SUPER_ADMIN ? '총책임자' : u.role === ROLE.ADMIN ? '관리자' : '사용자';
+            html += `
+                <div class="notif-user-item">
+                    <div class="notif-user-info">
+                        <span class="notif-user-name">${esc(u.name || u.email)}</span>
+                        <span class="notif-user-role">${roleLabel}</span>
+                    </div>
+                    <button class="btn-notif-settings" data-uid="${esc(u.id)}" data-name="${esc(u.name || u.email)}">설정</button>
+                </div>
+            `;
+        });
+
+        // 알림 설정 모달의 body를 사용자 목록으로 교체
+        const modal = document.getElementById('notifSettingsModal');
+        const modalBody = modal.querySelector('.modal-body');
+        modalBody.innerHTML = html;
+        modal.querySelector('h3').textContent = '알림 관리';
+        modal.querySelector('.modal-footer').style.display = 'none';
+        modal.classList.add('show');
+
+        // 각 사용자별 설정 버튼 이벤트
+        modalBody.querySelectorAll('.btn-notif-settings').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const uid = btn.dataset.uid;
+                const name = btn.dataset.name;
+                openNotifSettingsForUser(uid, name);
+            });
+        });
+    } catch (e) {
+        console.error('알림 관리 로드 오류:', e);
+        showToast('알림 관리를 불러오는 중 오류가 발생했습니다.', 'error');
+    }
+}
+
+async function openNotifSettingsForUser(uid, userName) {
+    currentNotifSettingsUid = uid;
+
+    const modal = document.getElementById('notifSettingsModal');
+    modal.querySelector('h3').textContent = '알림 설정';
+    modal.querySelector('.modal-footer').style.display = '';
+
+    // 설정 체크박스 목록으로 교체
+    const modalBody = modal.querySelector('.modal-body');
+    modalBody.innerHTML = `
+        <p id="notifSettingsUserName" style="font-weight:600; margin-bottom:12px;">${esc(userName)} 알림 설정</p>
+        <div class="notif-settings-list" id="notifSettingsList">
+            <label class="notif-toggle-item">
+                <span>임대 알림</span>
+                <input type="checkbox" data-type="rental" checked>
+            </label>
+            <label class="notif-toggle-item">
+                <span>임대회수 알림</span>
+                <input type="checkbox" data-type="return" checked>
+            </label>
+            <label class="notif-toggle-item">
+                <span>상태변경 알림</span>
+                <input type="checkbox" data-type="status_change" checked>
+            </label>
+            <label class="notif-toggle-item">
+                <span>외주요청 알림</span>
+                <input type="checkbox" data-type="outsource_request" checked>
+            </label>
+            <label class="notif-toggle-item">
+                <span>제품등록 알림</span>
+                <input type="checkbox" data-type="product_registered" checked>
+            </label>
+            <label class="notif-toggle-item">
+                <span>제품삭제 알림</span>
+                <input type="checkbox" data-type="product_deleted" checked>
+            </label>
+        </div>
+    `;
+
+    // Firestore에서 현재 설정 불러오기
+    try {
+        const userDoc = await db.collection('users').doc(uid).get();
+        const settings = userDoc.data()?.notificationSettings || {};
+
+        const checkboxes = modalBody.querySelectorAll('#notifSettingsList input[type="checkbox"]');
+        checkboxes.forEach(cb => {
+            const type = cb.dataset.type;
+            cb.checked = settings[type] !== false;
+        });
+    } catch (e) {
+        console.error('알림 설정 로드 오류:', e);
+    }
+}
+
+async function saveNotifSettings() {
+    if (!currentNotifSettingsUid) return;
+
+    const settings = {};
+    const checkboxes = document.querySelectorAll('#notifSettingsList input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+        settings[cb.dataset.type] = cb.checked;
+    });
+
+    try {
+        await db.collection('users').doc(currentNotifSettingsUid).update({
+            notificationSettings: settings
+        });
+        showToast('알림 설정이 저장되었습니다.', 'success');
+        document.getElementById('notifSettingsModal').classList.remove('show');
+        currentNotifSettingsUid = null;
+    } catch (e) {
+        console.error('알림 설정 저장 오류:', e);
+        showToast('알림 설정 저장 실패', 'error');
+    }
 }
 
 function updateProductList() {
@@ -1767,6 +1945,10 @@ function deleteProduct(productId) {
                 productName: product.name,
                 time: new Date().toISOString()
             });
+
+            if (typeof createNotification === 'function') {
+                createNotification('product_deleted', product.name, {});
+            }
 
             updateDashboard();
             updateProductList();
@@ -2498,6 +2680,10 @@ function initEditProductModal() {
                     note: newNote,
                     time: new Date().toISOString()
                 });
+
+                if (typeof createNotification === 'function') {
+                    createNotification('status_change', currentEditProduct.name, { newStatus: newStatus });
+                }
             }
 
             showToast(`${currentEditProduct.name} 정보가 수정되었습니다.`, 'success');

@@ -1678,6 +1678,132 @@ body {
     font-weight: 500;
 }
 
+/* 인앱 알림 배너 */
+.in-app-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    max-width: 360px;
+    animation: slideInRight 0.3s ease-out;
+    z-index: 10000;
+}
+
+.in-app-notification.fade-out {
+    animation: fadeOutRight 0.3s ease-out forwards;
+}
+
+@keyframes slideInRight {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fadeOutRight {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100%); opacity: 0; }
+}
+
+.in-app-notification-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.in-app-notification-content strong {
+    font-size: 0.95rem;
+    color: #333;
+}
+
+.in-app-notification-content span {
+    font-size: 0.85rem;
+    color: #666;
+}
+
+.in-app-notification button {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    color: #999;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.in-app-notification button:hover {
+    color: #333;
+}
+
+/* 알림 설정 모달 */
+.notif-user-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.notif-user-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.notif-user-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+}
+
+.notif-user-role {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 8px;
+    background: #f3f4f6;
+    color: #666;
+}
+
+.btn-notif-settings {
+    background: #8b5cf6;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.btn-notif-settings:hover {
+    background: #7c3aed;
+}
+
+.notif-toggle-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+}
+
+.notif-toggle-item span {
+    font-size: 14px;
+    color: #333;
+}
+
+.notif-toggle-item input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    accent-color: #2563eb;
+    cursor: pointer;
+}
+
 /* 사진 촬영 */
 .photo-capture-section {
     display: flex;
