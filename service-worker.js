@@ -1,6 +1,49 @@
-// DK AS Service Worker
-const CACHE_NAME = 'dk-as-v54';
-const APP_VERSION = '54';
+// DK AS Service Worker (PWA 캐시 + FCM 푸시 알림)
+
+// ===== Firebase Messaging =====
+importScripts("https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js");
+importScripts("https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js");
+
+firebase.initializeApp({
+    apiKey: "AIzaSyAsLIn6sPehogVNwN2DAtjODo9ENuH7hQE",
+    authDomain: "dk-as-b39cf.firebaseapp.com",
+    projectId: "dk-as-b39cf",
+    storageBucket: "dk-as-b39cf.firebasestorage.app",
+    messagingSenderId: "124470106166",
+    appId: "1:124470106166:web:e5f80a0ec7ffa0d93e2097"
+});
+
+const messaging = firebase.messaging();
+
+messaging.onBackgroundMessage((payload) => {
+    const { title, body, type } = payload.data || {};
+    self.registration.showNotification(title || "DK AS", {
+        body: body || "",
+        icon: "./icons/icon-72x72.png",
+        badge: "./icons/icon-72x72.png",
+        tag: type || "default",
+        renotify: true,
+        data: { url: "./index.html" }
+    });
+});
+
+self.addEventListener("notificationclick", (event) => {
+    event.notification.close();
+    event.waitUntil(
+        clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+            for (const client of clientList) {
+                if (client.url.includes("dk-as") && "focus" in client) {
+                    return client.focus();
+                }
+            }
+            return clients.openWindow("./index.html");
+        })
+    );
+});
+
+// ===== PWA 캐시 =====
+const CACHE_NAME = 'dk-as-v55';
+const APP_VERSION = '55';
 const urlsToCache = [
   './',
   './index.html',

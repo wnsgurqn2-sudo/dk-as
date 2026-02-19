@@ -45,11 +45,7 @@ async function requestNotificationPermission() {
         const permission = await Notification.requestPermission();
 
         if (permission === "granted") {
-            // firebase-messaging-sw.js로 등록된 SW를 찾거나, 기본 SW 사용
-            let swReg = await navigator.serviceWorker.getRegistration("./firebase-messaging-sw.js");
-            if (!swReg) {
-                swReg = await navigator.serviceWorker.getRegistration();
-            }
+            const swReg = await navigator.serviceWorker.getRegistration();
             const token = await messagingInstance.getToken({
                 vapidKey: VAPID_KEY,
                 serviceWorkerRegistration: swReg

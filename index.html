@@ -20,14 +20,14 @@
     <link rel="icon" type="image/png" sizes="72x72" href="icons/icon-72x72.png">
     <link rel="apple-touch-icon" href="icons/icon-72x72.png">
 
-    <link rel="stylesheet" href="styles.css?v=54">
+    <link rel="stylesheet" href="styles.css?v=55">
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js"></script>
-    <script src="firebase-config.js?v=54"></script>
+    <script src="firebase-config.js?v=55"></script>
     <!-- QR Code 스캔 라이브러리 -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <!-- QR Code 생성 라이브러리 -->
@@ -706,46 +706,20 @@
         </div>
     </div>
 
-    <script src="notifications.js?v=54"></script>
-    <script src="app.js?v=54"></script>
+    <script src="notifications.js?v=55"></script>
+    <script src="app.js?v=55"></script>
     <script>
-        // Service Worker 등록 및 강제 업데이트
+        // Service Worker 등록 (PWA 캐시 + FCM 통합)
         if ('serviceWorker' in navigator) {
-            let swUpdating = false;
-
             window.addEventListener('load', () => {
-                // PWA 캐시 서비스워커
                 navigator.serviceWorker.register('./service-worker.js')
                     .then((registration) => {
                         console.log('Service Worker 등록 성공:', registration.scope);
                         registration.update();
-
-                        registration.addEventListener('updatefound', () => {
-                            const newWorker = registration.installing;
-                            newWorker.addEventListener('statechange', () => {
-                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    console.log('새 버전 감지, 새로고침...');
-                                    swUpdating = true;
-                                    window.location.reload();
-                                }
-                            });
-                        });
                     })
                     .catch((error) => {
                         console.log('Service Worker 등록 실패:', error);
                     });
-
-                // Firebase Messaging 서비스워커 (별도 scope)
-                navigator.serviceWorker.register('./firebase-messaging-sw.js')
-                    .then((reg) => console.log('FCM SW 등록 성공:', reg.scope))
-                    .catch((err) => console.log('FCM SW 등록 실패:', err));
-            });
-
-            // PWA 업데이트 시에만 새로고침 (FCM SW 등록으로 인한 리로드 방지)
-            navigator.serviceWorker.addEventListener('controllerchange', () => {
-                if (swUpdating) {
-                    window.location.reload();
-                }
             });
         }
     </script>
