@@ -2914,7 +2914,7 @@ function showPhotoModal(src) {
 
 window.showPhotoModal = showPhotoModal;
 
-// 사진 일괄 다운로드
+// 사진 일괄 다운로드 (ZIP)
 async function downloadAllPhotos(jsonStr, prefix) {
     let urls;
     try {
@@ -2925,27 +2925,40 @@ async function downloadAllPhotos(jsonStr, prefix) {
     }
     if (!urls || urls.length === 0) return;
 
-    showToast(`${urls.length}장 다운로드 시작...`, 'success');
+    showToast(`${urls.length}장 압축 중...`, 'success');
 
-    for (let i = 0; i < urls.length; i++) {
-        try {
-            const response = await fetch(urls[i]);
-            const blob = await response.blob();
-            const blobUrl = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = blobUrl;
-            a.download = `${prefix}_${i + 1}.jpg`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(blobUrl);
-            // 브라우저 다운로드 간격 (너무 빠르면 누락됨)
-            if (urls.length > 1) await new Promise(r => setTimeout(r, 500));
-        } catch (e) {
-            console.error(`사진 ${i + 1} 다운로드 실패:`, e);
+    try {
+        const zip = new JSZip();
+
+        const results = await Promise.allSettled(
+            urls.map(async (url, i) => {
+                const response = await fetch(url);
+                const blob = await response.blob();
+                const ext = blob.type === 'image/png' ? 'png' : 'jpg';
+                zip.file(`${prefix}_${i + 1}.${ext}`, blob);
+            })
+        );
+
+        const failCount = results.filter(r => r.status === 'rejected').length;
+        if (failCount > 0) {
+            showToast(`${failCount}장 다운로드 실패, ${urls.length - failCount}장 압축 중...`, 'error');
         }
+
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const blobUrl = URL.createObjectURL(zipBlob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `${prefix}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+
+        showToast('다운로드 완료', 'success');
+    } catch (e) {
+        console.error('ZIP 다운로드 오류:', e);
+        showToast('다운로드 실패', 'error');
     }
-    showToast('다운로드 완료', 'success');
 }
 window.downloadAllPhotos = downloadAllPhotos;
 
