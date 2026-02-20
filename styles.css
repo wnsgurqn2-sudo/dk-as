@@ -1985,11 +1985,37 @@ body {
     border-top: 1px dashed var(--gray-300);
 }
 
+.photos-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.photos-label-row .photos-label {
+    margin-bottom: 0;
+}
+
 .photos-label {
     font-size: 12px;
     font-weight: 500;
     color: var(--gray-600);
     margin-bottom: 8px;
+}
+
+.btn-photo-download {
+    font-size: 11px;
+    padding: 3px 10px;
+    background: var(--info-color);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.btn-photo-download:hover {
+    opacity: 0.85;
 }
 
 .history-photos {

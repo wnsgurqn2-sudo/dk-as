@@ -2781,9 +2781,13 @@ function showRentalHistory(productId) {
             let rentalPhotosHtml = '';
             const rentalPhotos = record.photos || (record.photo ? [record.photo] : []);
             if (rentalPhotos.length > 0) {
+                const rentalPhotoData = encodeURIComponent(JSON.stringify(rentalPhotos));
                 rentalPhotosHtml = `
                     <div class="history-photos-section">
-                        <p class="photos-label">임대 전 사진 (${rentalPhotos.length}장)</p>
+                        <div class="photos-label-row">
+                            <p class="photos-label">임대 전 사진 (${rentalPhotos.length}장)</p>
+                            <button class="btn-photo-download" onclick="downloadAllPhotos(decodeURIComponent('${rentalPhotoData}'), '${esc(product.name)}_임대전_${rentalDate}')">전체 다운로드</button>
+                        </div>
                         <div class="history-photos">
                             ${rentalPhotos.map((p, i) => `<img src="${p}" alt="임대 전 ${i+1}" onclick="showPhotoModal('${p}')">`).join('')}
                         </div>
@@ -2795,9 +2799,13 @@ function showRentalHistory(productId) {
             let returnPhotosHtml = '';
             const returnPhotos = record.returnPhotos || (record.returnPhoto ? [record.returnPhoto] : []);
             if (returnPhotos.length > 0) {
+                const returnPhotoData = encodeURIComponent(JSON.stringify(returnPhotos));
                 returnPhotosHtml = `
                     <div class="history-photos-section">
-                        <p class="photos-label">회수 후 사진 (${returnPhotos.length}장)</p>
+                        <div class="photos-label-row">
+                            <p class="photos-label">회수 후 사진 (${returnPhotos.length}장)</p>
+                            <button class="btn-photo-download" onclick="downloadAllPhotos(decodeURIComponent('${returnPhotoData}'), '${esc(product.name)}_회수후_${returnDate}')">전체 다운로드</button>
+                        </div>
                         <div class="history-photos">
                             ${returnPhotos.map((p, i) => `<img src="${p}" alt="회수 후 ${i+1}" onclick="showPhotoModal('${p}')">`).join('')}
                         </div>
@@ -2905,6 +2913,41 @@ function showPhotoModal(src) {
 }
 
 window.showPhotoModal = showPhotoModal;
+
+// 사진 일괄 다운로드
+async function downloadAllPhotos(jsonStr, prefix) {
+    let urls;
+    try {
+        urls = JSON.parse(jsonStr);
+    } catch (e) {
+        showToast('다운로드 데이터 오류', 'error');
+        return;
+    }
+    if (!urls || urls.length === 0) return;
+
+    showToast(`${urls.length}장 다운로드 시작...`, 'success');
+
+    for (let i = 0; i < urls.length; i++) {
+        try {
+            const response = await fetch(urls[i]);
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = `${prefix}_${i + 1}.jpg`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(blobUrl);
+            // 브라우저 다운로드 간격 (너무 빠르면 누락됨)
+            if (urls.length > 1) await new Promise(r => setTimeout(r, 500));
+        } catch (e) {
+            console.error(`사진 ${i + 1} 다운로드 실패:`, e);
+        }
+    }
+    showToast('다운로드 완료', 'success');
+}
+window.downloadAllPhotos = downloadAllPhotos;
 
 function closeRentalHistoryModal() {
     document.getElementById('rentalHistoryModal').classList.remove('show');
