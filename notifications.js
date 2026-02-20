@@ -45,7 +45,13 @@ async function requestNotificationPermission() {
         const permission = await Notification.requestPermission();
 
         if (permission === "granted") {
-            const swReg = await navigator.serviceWorker.getRegistration();
+            // 서비스워커가 준비될 때까지 대기
+            let swReg = await navigator.serviceWorker.getRegistration();
+            if (!swReg) {
+                // SW가 아직 없으면 ready 대기
+                swReg = await navigator.serviceWorker.ready;
+            }
+
             const token = await messagingInstance.getToken({
                 vapidKey: VAPID_KEY,
                 serviceWorkerRegistration: swReg
@@ -53,7 +59,25 @@ async function requestNotificationPermission() {
 
             if (token) {
                 await saveFcmToken(token);
-                console.log("FCM token registered.");
+                console.log("FCM token registered. Platform:", /Mobi|Android/i.test(navigator.userAgent) ? "Mobile" : "PC");
+            } else {
+                console.warn("FCM token is null. Retrying...");
+                // 1회 재시도
+                setTimeout(async () => {
+                    try {
+                        const retryReg = await navigator.serviceWorker.ready;
+                        const retryToken = await messagingInstance.getToken({
+                            vapidKey: VAPID_KEY,
+                            serviceWorkerRegistration: retryReg
+                        });
+                        if (retryToken) {
+                            await saveFcmToken(retryToken);
+                            console.log("FCM token registered on retry.");
+                        }
+                    } catch (retryErr) {
+                        console.error("FCM token retry error:", retryErr);
+                    }
+                }, 3000);
             }
         } else {
             console.log("Notification permission denied.");
@@ -196,7 +220,22 @@ function renderNotificationButton() {
             }
         });
     } else if (permission === "granted") {
-        // 이미 허용됨 → 토큰만 등록
+        // 이미 허용됨 → 토큰 등록 + 상태 표시
         requestNotificationPermission();
+
+        const notifItem = document.createElement("div");
+        notifItem.className = "settings-item";
+        notifItem.id = "notifPermItem";
+        notifItem.style.marginTop = "8px";
+        notifItem.innerHTML = `
+            <span class="settings-label">푸시 알림</span>
+            <button class="view-btn active" id="notifPermBtn" disabled
+                    style="background: #4CAF50; color: #fff; cursor: default;">
+                허용됨
+            </button>
+        `;
+
+        const logoutItem = settingsDropdown.querySelector(".settings-item:last-child");
+        settingsDropdown.insertBefore(notifItem, logoutItem);
     }
 }

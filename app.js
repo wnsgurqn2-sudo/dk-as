@@ -1366,7 +1366,7 @@ function initScanActions() {
                 });
 
                 if (typeof createNotification === 'function') {
-                    createNotification('status_change', currentScannedProduct.name, { newStatus: selectedChangeStatus });
+                    createNotification('status_change', currentScannedProduct.name, { newStatus: selectedChangeStatus, previousStatus: previousStatus });
                     if (selectedChangeStatus === '수리중' && outsourceRequested) {
                         createNotification('outsource_request', currentScannedProduct.name, {});
                     }
@@ -1742,7 +1742,23 @@ async function openNotifManageModal() {
             }
         });
 
-        let html = '<div style="margin-bottom:12px;font-size:13px;color:#666;">각 사용자의 알림 수신 설정을 관리합니다.</div>';
+        // 총책임자 broadcast 설정 조회
+        const superadminUser = approvedUsers.find(u => u.role === ROLE.SUPER_ADMIN);
+        const broadcastOn = superadminUser?.broadcastNotifications === true;
+
+        let html = '';
+        // 총책임자 전용: 내 행동 알림 발송 토글
+        html += `
+            <div style="margin-bottom:16px; padding:12px; background:#FFF3E0; border-radius:8px; border:1px solid #FFE0B2;">
+                <div style="font-weight:600; margin-bottom:8px; color:#E65100;">총책임자 알림 발송</div>
+                <label class="notif-toggle-item" style="margin:0;">
+                    <span>내 행동을 다른 사용자에게 알림</span>
+                    <input type="checkbox" id="broadcastToggle" ${broadcastOn ? 'checked' : ''}>
+                </label>
+                <div style="font-size:11px; color:#999; margin-top:6px;">ON: 총책임자 행동 시 관리자+사용자에게 알림 발송</div>
+            </div>
+        `;
+        html += '<div style="margin-bottom:12px;font-size:13px;color:#666;">각 사용자의 알림 수신 설정을 관리합니다.</div>';
         approvedUsers.forEach(u => {
             const roleLabel = u.role === ROLE.SUPER_ADMIN ? '총책임자' : u.role === ROLE.ADMIN ? '관리자' : '사용자';
             html += `
@@ -1763,6 +1779,22 @@ async function openNotifManageModal() {
         modal.querySelector('h3').textContent = '알림 관리';
         modal.querySelector('.modal-footer').style.display = 'none';
         modal.classList.add('show');
+
+        // broadcast 토글 이벤트
+        const broadcastToggle = document.getElementById('broadcastToggle');
+        if (broadcastToggle && superadminUser) {
+            broadcastToggle.addEventListener('change', async () => {
+                try {
+                    await db.collection('users').doc(superadminUser.id).update({
+                        broadcastNotifications: broadcastToggle.checked
+                    });
+                    showToast(broadcastToggle.checked ? '총책임자 알림 발송 활성화' : '총책임자 알림 발송 비활성화', 'success');
+                } catch (e) {
+                    console.error('broadcast 설정 저장 오류:', e);
+                    showToast('설정 저장 실패', 'error');
+                }
+            });
+        }
 
         // 각 사용자별 설정 버튼 이벤트
         modalBody.querySelectorAll('.btn-notif-settings').forEach(btn => {
@@ -2704,7 +2736,7 @@ function initEditProductModal() {
                 });
 
                 if (typeof createNotification === 'function') {
-                    createNotification('status_change', currentEditProduct.name, { newStatus: newStatus });
+                    createNotification('status_change', currentEditProduct.name, { newStatus: newStatus, previousStatus: previousStatus });
                 }
             }
 

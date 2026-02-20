@@ -91,8 +91,21 @@ exports.processNotification = onDocumentCreated(
                     console.log(`  수신자 후보: ${doc.id} (${doc.data().name}, ${doc.data().role})`);
                     recipientUids.add(doc.id);
                 });
-            } else {
-                console.log(`총책임자(${actorRole}) 행동 → 알림 없음`);
+            } else if (actorRole === "superadmin") {
+                // 총책임자 → broadcastNotifications 설정 확인
+                const broadcastEnabled = actor.broadcastNotifications === true;
+                if (broadcastEnabled) {
+                    console.log("총책임자 행동 + broadcast ON → 모든 승인 사용자에게 알림");
+                    const allUsers = await db.collection("users")
+                        .where("approved", "==", true)
+                        .get();
+                    console.log(`승인 사용자 조회 결과: ${allUsers.size}명`);
+                    allUsers.forEach(doc => {
+                        recipientUids.add(doc.id);
+                    });
+                } else {
+                    console.log("총책임자 행동 + broadcast OFF → 알림 없음");
+                }
             }
 
             // 본인 제외
@@ -214,11 +227,15 @@ function buildNotificationContent(type, actorName, productName, extraData) {
                 title: "임대회수 알림",
                 body: `${actorName}님이 "${name}"을(를) 회수했습니다. (${extraData.status || ""})`
             };
-        case "status_change":
+        case "status_change": {
+            const prev = extraData.previousStatus;
+            const next = extraData.newStatus || "";
+            const statusText = prev ? `${prev} → ${next}` : `${next}`;
             return {
                 title: "상태변경 알림",
-                body: `${actorName}님이 "${name}" 상태를 ${extraData.newStatus || ""}(으)로 변경했습니다.`
+                body: `${actorName}님이 "${name}" 상태를 ${statusText}(으)로 변경했습니다.`
             };
+        }
         case "outsource_request":
             return {
                 title: "외주요청 알림",
