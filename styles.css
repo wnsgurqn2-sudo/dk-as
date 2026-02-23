@@ -2872,6 +2872,28 @@ body.large-view .admin-history-item .history-time {
     margin-left: 10px;
 }
 
+.user-perm-row {
+    margin-top: 4px;
+}
+
+.perm-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.perm-toggle input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: #2563eb;
+}
+
+.perm-label {
+    color: var(--gray-600);
+}
+
 .btn-approve {
     padding: 6px 14px;
     font-size: 13px;

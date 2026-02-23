@@ -22,6 +22,13 @@ let isAdmin = false;
 let isSuperAdmin = false;
 let userRole = ROLE.USER;
 
+// ===== 수동 임대 권한 확인 =====
+function canManualRental() {
+    if (isSuperAdmin) return true;
+    if (isAdmin && currentUserProfile?.manualRentalPermission === true) return true;
+    return false;
+}
+
 // ===== 시리얼넘버 생성 =====
 function generateSerialNumber() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -400,11 +407,21 @@ function renderApprovedUsers(users) {
     container.innerHTML = users.map(u => {
         const role = u.role || ROLE.USER;
         const roleLabel = role === ROLE.ADMIN ? '관리자' : '사용자';
+        const hasManualRental = u.manualRentalPermission === true;
+        const rentalPermHtml = role === ROLE.ADMIN ? `
+            <div class="user-perm-row">
+                <label class="perm-toggle">
+                    <input type="checkbox" ${hasManualRental ? 'checked' : ''} onchange="toggleManualRentalPerm('${esc(u.id)}', this.checked)">
+                    <span class="perm-label">수동임대 권한</span>
+                </label>
+            </div>
+        ` : '';
         return `
         <div class="user-manage-item">
             <div class="user-manage-info">
                 <div class="user-manage-name">${esc(u.department)} ${esc(u.name)} <span class="role-badge role-${esc(role)}">${esc(roleLabel)}</span></div>
                 <div class="user-manage-email">${esc(u.email)}</div>
+                ${rentalPermHtml}
             </div>
             <div class="user-manage-actions">
                 <select class="role-select" id="roleSelect_${esc(u.id)}" onchange="changeUserRole('${esc(u.id)}', this.value)">
@@ -437,6 +454,15 @@ async function changeUserRole(userId, newRole) {
         loadUserList();
     } catch (e) {
         showToast('역할 변경 실패: ' + e.message, 'error');
+    }
+}
+
+async function toggleManualRentalPerm(userId, enabled) {
+    try {
+        await db.collection('users').doc(userId).update({ manualRentalPermission: enabled });
+        showToast(enabled ? '수동임대 권한 부여' : '수동임대 권한 해제', 'success');
+    } catch (e) {
+        showToast('권한 변경 실패: ' + e.message, 'error');
     }
 }
 
@@ -2646,18 +2672,6 @@ function initEditProductModal() {
         showRepairHistory(currentEditProduct.id);
     });
 
-    // 상태 변경 시 예약 담당자 입력 표시/숨김
-    document.getElementById('editProductStatus').addEventListener('change', (e) => {
-        const reservedByGroup = document.getElementById('reservedByGroup');
-        if (e.target.value === '예약') {
-            reservedByGroup.style.display = 'block';
-            document.getElementById('editReservedBy').focus();
-        } else {
-            reservedByGroup.style.display = 'none';
-            document.getElementById('editReservedBy').value = '';
-        }
-    });
-
     saveBtn.addEventListener('click', () => {
         if (!currentEditProduct) return;
 
@@ -2679,68 +2693,118 @@ function initEditProductModal() {
             }
         }
 
+        // 수동 임대 시 업체명 필수
+        if (newStatus === '임대') {
+            const rentalCompany = document.getElementById('editRentalCompany').value.trim();
+            if (!rentalCompany) {
+                showToast('임대 업체명을 입력해주세요.', 'error');
+                return;
+            }
+        }
+
         const productIndex = products.findIndex(p => p.id === currentEditProduct.id);
         if (productIndex !== -1) {
             const previousStatus = products[productIndex].status;
 
-            // 수리기록 처리
-            if (!products[productIndex].repairHistory) {
-                products[productIndex].repairHistory = [];
-            }
+            // === 수동 임대 처리 ===
+            if (newStatus === '임대') {
+                const rentalCompany = document.getElementById('editRentalCompany').value.trim();
+                const rentalRecord = {
+                    type: '임대',
+                    company: rentalCompany,
+                    rentalDate: new Date().toISOString(),
+                    remainingHoursAtRental: products[productIndex].remainingHours || products[productIndex].totalHours,
+                    photos: []
+                };
 
-            // 수리중으로 변경 시 수리 시작 기록
-            if (newStatus === '수리중' && previousStatus !== '수리중') {
-                products[productIndex].repairHistory.push({
-                    startDate: new Date().toISOString(),
-                    endDate: null,
-                    note: newNote
-                });
-            }
-
-            // 수리중에서 다른 상태로 변경 시 수리 완료 기록
-            if (previousStatus === '수리중' && newStatus !== '수리중') {
-                const lastRepair = products[productIndex].repairHistory[products[productIndex].repairHistory.length - 1];
-                if (lastRepair && !lastRepair.endDate) {
-                    lastRepair.endDate = new Date().toISOString();
-                    lastRepair.endNote = newNote;
+                if (!products[productIndex].rentalHistory) {
+                    products[productIndex].rentalHistory = [];
                 }
-            }
+                products[productIndex].rentalHistory.push(rentalRecord);
+                products[productIndex].currentRentalIndex = products[productIndex].rentalHistory.length - 1;
+                products[productIndex].isRented = true;
+                products[productIndex].rentalCompany = rentalCompany;
+                products[productIndex].rentalDate = rentalRecord.rentalDate;
+                products[productIndex].lastUpdated = new Date().toISOString();
 
-            products[productIndex].status = newStatus;
-            products[productIndex].lastNote = newNote;
-            products[productIndex].lastUpdated = new Date().toISOString();
+                saveProduct(products[productIndex]);
 
-            // 예약 정보 처리
-            if (newStatus === '예약') {
-                products[productIndex].isReserved = true;
-                products[productIndex].reservedBy = document.getElementById('editReservedBy').value.trim();
-                products[productIndex].reservedDate = new Date().toISOString();
-            } else {
-                products[productIndex].isReserved = false;
-                products[productIndex].reservedBy = null;
-                products[productIndex].reservedDate = null;
-            }
-
-            saveProduct(products[productIndex]);
-
-            // 상태가 변경된 경우에만 기록 추가
-            if (previousStatus !== newStatus) {
                 addHistory({
-                    type: '상태변경',
+                    type: '임대',
                     productId: currentEditProduct.id,
                     productName: currentEditProduct.name,
-                    previousStatus: previousStatus,
-                    newStatus: newStatus,
+                    company: rentalCompany,
                     note: newNote,
                     time: new Date().toISOString()
                 });
 
                 if (typeof createNotification === 'function') {
-                    createNotification('status_change', currentEditProduct.name, { newStatus: newStatus, previousStatus: previousStatus });
+                    createNotification('rental', currentEditProduct.name, { company: rentalCompany });
                 }
-            }
 
-            showToast(`${currentEditProduct.name} 정보가 수정되었습니다.`, 'success');
+                showToast(`${currentEditProduct.name} → ${rentalCompany} 임대 처리되었습니다.`, 'success');
+            } else {
+                // === 기존 상태변경 처리 ===
+
+                // 수리기록 처리
+                if (!products[productIndex].repairHistory) {
+                    products[productIndex].repairHistory = [];
+                }
+
+                // 수리중으로 변경 시 수리 시작 기록
+                if (newStatus === '수리중' && previousStatus !== '수리중') {
+                    products[productIndex].repairHistory.push({
+                        startDate: new Date().toISOString(),
+                        endDate: null,
+                        note: newNote
+                    });
+                }
+
+                // 수리중에서 다른 상태로 변경 시 수리 완료 기록
+                if (previousStatus === '수리중' && newStatus !== '수리중') {
+                    const lastRepair = products[productIndex].repairHistory[products[productIndex].repairHistory.length - 1];
+                    if (lastRepair && !lastRepair.endDate) {
+                        lastRepair.endDate = new Date().toISOString();
+                        lastRepair.endNote = newNote;
+                    }
+                }
+
+                products[productIndex].status = newStatus;
+                products[productIndex].lastNote = newNote;
+                products[productIndex].lastUpdated = new Date().toISOString();
+
+                // 예약 정보 처리
+                if (newStatus === '예약') {
+                    products[productIndex].isReserved = true;
+                    products[productIndex].reservedBy = document.getElementById('editReservedBy').value.trim();
+                    products[productIndex].reservedDate = new Date().toISOString();
+                } else {
+                    products[productIndex].isReserved = false;
+                    products[productIndex].reservedBy = null;
+                    products[productIndex].reservedDate = null;
+                }
+
+                saveProduct(products[productIndex]);
+
+                // 상태가 변경된 경우에만 기록 추가
+                if (previousStatus !== newStatus) {
+                    addHistory({
+                        type: '상태변경',
+                        productId: currentEditProduct.id,
+                        productName: currentEditProduct.name,
+                        previousStatus: previousStatus,
+                        newStatus: newStatus,
+                        note: newNote,
+                        time: new Date().toISOString()
+                    });
+
+                    if (typeof createNotification === 'function') {
+                        createNotification('status_change', currentEditProduct.name, { newStatus: newStatus, previousStatus: previousStatus });
+                    }
+                }
+
+                showToast(`${currentEditProduct.name} 정보가 수정되었습니다.`, 'success');
+            }
         }
 
         // 모달 닫기 먼저 실행
@@ -3014,6 +3078,9 @@ function openEditProductModal(productId) {
         statusFormGroup.classList.add('disabled');
     } else {
         statusSelect.disabled = false;
+        const rentalOption = canManualRental()
+            ? '<option value="임대" style="color: #ef4444; font-weight: 700;">임대 (수동)</option>'
+            : '';
         statusSelect.innerHTML = `
             <option value="미점검">미점검</option>
             <option value="수리대기">수리대기</option>
@@ -3023,12 +3090,17 @@ function openEditProductModal(productId) {
             <option value="청소완료">청소완료</option>
             <option value="출고준비완료">출고준비완료</option>
             <option value="예약" style="color: #2563eb; font-weight: 700;">예약</option>
+            ${rentalOption}
         `;
         statusSelect.value = product.status;
         statusFormGroup.classList.remove('disabled');
     }
 
-    // 예약 담당자 필드 처리
+    // 임대 업체명 / 예약 담당자 필드 처리
+    const editRentalCompanyGroup = document.getElementById('editRentalCompanyGroup');
+    editRentalCompanyGroup.style.display = 'none';
+    document.getElementById('editRentalCompany').value = '';
+
     const reservedByGroup = document.getElementById('reservedByGroup');
     if (product.status === '예약' && product.reservedBy) {
         reservedByGroup.style.display = 'block';
@@ -3037,6 +3109,12 @@ function openEditProductModal(productId) {
         reservedByGroup.style.display = 'none';
         document.getElementById('editReservedBy').value = '';
     }
+
+    // 상태 변경 시 임대/예약 필드 토글
+    statusSelect.onchange = function() {
+        editRentalCompanyGroup.style.display = this.value === '임대' ? 'block' : 'none';
+        reservedByGroup.style.display = this.value === '예약' ? 'block' : 'none';
+    };
 
     document.getElementById('editProductNote').value = product.lastNote || '';
 
