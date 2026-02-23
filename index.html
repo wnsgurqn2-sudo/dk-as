@@ -525,6 +525,26 @@
                     <label for="editRentalCompany">임대 업체명 *</label>
                     <input type="text" id="editRentalCompany" placeholder="업체명 입력">
                 </div>
+                <div id="editReturnGroup" style="display: none;">
+                    <div class="form-group">
+                        <label for="editReturnHours">회수 후 잔여시간 *</label>
+                        <input type="number" id="editReturnHours" placeholder="잔여시간 입력" min="0">
+                        <div id="editReturnUsedInfo" style="font-size:12px; color:#666; margin-top:4px;"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>회수 후 상태 *</label>
+                        <select id="editReturnStatus">
+                            <option value="">선택</option>
+                            <option value="미점검">미점검</option>
+                            <option value="수리대기">수리대기</option>
+                            <option value="수리중">수리중</option>
+                            <option value="수리완료">수리완료</option>
+                            <option value="청소대기">청소대기</option>
+                            <option value="청소완료">청소완료</option>
+                            <option value="출고준비완료">출고준비완료</option>
+                        </select>
+                    </div>
+                </div>
                 <div class="form-group" id="reservedByGroup" style="display: none;">
                     <label for="editReservedBy">담당자 이름 *</label>
                     <input type="text" id="editReservedBy" placeholder="예약 담당자 이름 입력">

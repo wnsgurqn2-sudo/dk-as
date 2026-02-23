@@ -2675,14 +2675,18 @@ function initEditProductModal() {
     saveBtn.addEventListener('click', () => {
         if (!currentEditProduct) return;
 
-        // 임대중인 경우 저장하지 않음
-        if (currentEditProduct.isRented) {
+        const newStatus = document.getElementById('editProductStatus').value;
+        const newNote = document.getElementById('editProductNote').value.trim();
+
+        // 임대중인 경우: 수동회수만 허용
+        if (currentEditProduct.isRented && newStatus === '임대중') {
+            showToast('변경사항이 없습니다.', 'error');
+            return;
+        }
+        if (currentEditProduct.isRented && newStatus !== '임대회수') {
             showToast('임대중인 제품은 상태를 변경할 수 없습니다.', 'error');
             return;
         }
-
-        const newStatus = document.getElementById('editProductStatus').value;
-        const newNote = document.getElementById('editProductNote').value.trim();
 
         // 예약 시 담당자 이름 필수
         if (newStatus === '예약') {
@@ -2702,12 +2706,78 @@ function initEditProductModal() {
             }
         }
 
+        // 수동 임대회수 시 검증
+        if (newStatus === '임대회수') {
+            const returnStatus = document.getElementById('editReturnStatus').value;
+            const returnHours = document.getElementById('editReturnHours').value;
+            if (!returnStatus) {
+                showToast('회수 후 상태를 선택해주세요.', 'error');
+                return;
+            }
+            if (returnHours === '') {
+                showToast('회수 후 잔여시간을 입력해주세요.', 'error');
+                return;
+            }
+        }
+
         const productIndex = products.findIndex(p => p.id === currentEditProduct.id);
         if (productIndex !== -1) {
             const previousStatus = products[productIndex].status;
 
+            // === 수동 임대회수 처리 ===
+            if (newStatus === '임대회수') {
+                const returnStatus = document.getElementById('editReturnStatus').value;
+                const newRemaining = parseInt(document.getElementById('editReturnHours').value) || 0;
+                const previousRemaining = products[productIndex].remainingHours || products[productIndex].totalHours;
+                const usedHours = Math.abs(previousRemaining - newRemaining);
+                const company = products[productIndex].rentalCompany;
+
+                // 현재 임대 기록 업데이트
+                if (products[productIndex].rentalHistory && products[productIndex].currentRentalIndex !== undefined) {
+                    const currentRental = products[productIndex].rentalHistory[products[productIndex].currentRentalIndex];
+                    if (currentRental) {
+                        currentRental.returnDate = new Date().toISOString();
+                        currentRental.usedHours = usedHours;
+                        currentRental.remainingHoursAtReturn = newRemaining;
+                        currentRental.note = newNote;
+                        currentRental.returnPhotos = [];
+                    }
+                }
+
+                products[productIndex].remainingHours = newRemaining;
+                products[productIndex].isRented = false;
+                products[productIndex].status = returnStatus;
+                products[productIndex].lastUpdated = new Date().toISOString();
+                products[productIndex].lastNote = newNote;
+                products[productIndex].lastCompany = company;
+                products[productIndex].lastUsedHours = usedHours;
+                products[productIndex].rentalCompany = null;
+                products[productIndex].rentalDate = null;
+                products[productIndex].currentRentalIndex = null;
+
+                saveProduct(products[productIndex]);
+
+                addHistory({
+                    type: '임대회수',
+                    productId: currentEditProduct.id,
+                    productName: currentEditProduct.name,
+                    company: company,
+                    usedHours: usedHours,
+                    previousRemaining: previousRemaining,
+                    newRemaining: newRemaining,
+                    note: newNote,
+                    status: returnStatus,
+                    time: new Date().toISOString()
+                });
+
+                if (typeof createNotification === 'function') {
+                    createNotification('return', currentEditProduct.name, { status: returnStatus });
+                }
+
+                showToast(`${currentEditProduct.name} 임대회수 완료 (${company}, 사용 ${usedHours}시간)`, 'success');
+            }
             // === 수동 임대 처리 ===
-            if (newStatus === '임대') {
+            else if (newStatus === '임대') {
                 const rentalCompany = document.getElementById('editRentalCompany').value.trim();
                 const rentalRecord = {
                     type: '임대',
@@ -3070,8 +3140,23 @@ function openEditProductModal(productId) {
     const statusSelect = document.getElementById('editProductStatus');
     const statusFormGroup = statusSelect.closest('.form-group');
 
-    // 임대중인 경우 상태변경 비활성화
-    if (product.isRented) {
+    // 임대중인 경우
+    const editReturnGroup = document.getElementById('editReturnGroup');
+    editReturnGroup.style.display = 'none';
+    document.getElementById('editReturnHours').value = '';
+    document.getElementById('editReturnStatus').value = '';
+    document.getElementById('editReturnUsedInfo').innerHTML = '';
+
+    if (product.isRented && canManualRental()) {
+        // 수동임대 권한 있으면 → 회수 옵션 제공
+        statusSelect.disabled = false;
+        statusSelect.innerHTML = `
+            <option value="임대중">임대중</option>
+            <option value="임대회수" style="color: #10b981; font-weight: 700;">임대회수 (수동)</option>
+        `;
+        statusSelect.value = '임대중';
+        statusFormGroup.classList.remove('disabled');
+    } else if (product.isRented) {
         statusSelect.disabled = true;
         statusSelect.innerHTML = '<option value="임대중">임대중</option>';
         statusSelect.value = '임대중';
@@ -3110,10 +3195,27 @@ function openEditProductModal(productId) {
         document.getElementById('editReservedBy').value = '';
     }
 
-    // 상태 변경 시 임대/예약 필드 토글
+    // 상태 변경 시 필드 토글
     statusSelect.onchange = function() {
         editRentalCompanyGroup.style.display = this.value === '임대' ? 'block' : 'none';
         reservedByGroup.style.display = this.value === '예약' ? 'block' : 'none';
+        editReturnGroup.style.display = this.value === '임대회수' ? 'block' : 'none';
+        if (this.value === '임대회수') {
+            const prevHours = product.remainingHours || product.totalHours;
+            document.getElementById('editReturnUsedInfo').innerHTML =
+                `현재 임대: <strong>${product.rentalCompany}</strong> | 임대 전 잔여: <strong>${prevHours}시간</strong>`;
+        }
+    };
+
+    // 회수 잔여시간 입력 시 실사용시간 계산
+    document.getElementById('editReturnHours').oninput = function() {
+        const prevHours = product.remainingHours || product.totalHours;
+        const newHours = parseInt(this.value) || 0;
+        const used = Math.abs(prevHours - newHours);
+        document.getElementById('editReturnUsedInfo').innerHTML =
+            `현재 임대: <strong>${product.rentalCompany}</strong> | ` +
+            `${prevHours}시간 → ${newHours}시간 | ` +
+            `<strong style="color:#dc2626;">실사용: ${used}시간</strong>`;
     };
 
     document.getElementById('editProductNote').value = product.lastNote || '';
