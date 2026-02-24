@@ -13,9 +13,9 @@ const overlay = document.getElementById('loginOverlay');
 const isMobile = /Mobi|Android/i.test(navigator.userAgent);
 
 const colorPalettes = [
-    [new THREE.Color(0x667eea), new THREE.Color(0x764ba2), new THREE.Color(0xf093fb), new THREE.Color(0x9d50bb), new THREE.Color(0x6e48aa)],
-    [new THREE.Color(0xf857a6), new THREE.Color(0xff5858), new THREE.Color(0xfeca57), new THREE.Color(0xff6348), new THREE.Color(0xff9068)],
-    [new THREE.Color(0x4facfe), new THREE.Color(0x00f2fe), new THREE.Color(0x43e97b), new THREE.Color(0x38f9d7), new THREE.Color(0x4484ce)]
+    [new THREE.Color(0x1e90ff), new THREE.Color(0x4169e1), new THREE.Color(0x87cefa), new THREE.Color(0x3b82f6), new THREE.Color(0x2563eb)],
+    [new THREE.Color(0x0ea5e9), new THREE.Color(0x38bdf8), new THREE.Color(0x7dd3fc), new THREE.Color(0x0284c7), new THREE.Color(0x0369a1)],
+    [new THREE.Color(0x6366f1), new THREE.Color(0x818cf8), new THREE.Color(0xa5b4fc), new THREE.Color(0x4f46e5), new THREE.Color(0x4338ca)]
 ];
 let activePaletteIndex = 0;
 let currentFormation = 0;
