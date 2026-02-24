@@ -26,7 +26,10 @@ const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x000000, 0.002);
 
 const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.set(0, 8, 28);
+camera.position.set(0, 20, 80); // 멀리서 시작
+const cameraTarget = new THREE.Vector3(0, 8, 28); // 최종 위치
+const zoomDuration = 3.0; // 줌인 시간(초)
+let zoomStartTime = -1;
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile, powerPreference: 'high-performance' });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -502,6 +505,16 @@ function animate() {
     if (document.hidden) return;
 
     const time = clock.getElapsedTime();
+
+    // 줌인 애니메이션
+    if (zoomStartTime < 0) zoomStartTime = time;
+    const zoomElapsed = time - zoomStartTime;
+    if (zoomElapsed < zoomDuration) {
+        const t = zoomElapsed / zoomDuration;
+        const ease = 1 - Math.pow(1 - t, 3); // easeOutCubic
+        camera.position.lerpVectors(new THREE.Vector3(0, 20, 80), cameraTarget, ease);
+    }
+
     controls.update();
     starField.material.uniforms.uTime.value = time;
     if (nodesMesh) nodesMesh.material.uniforms.uTime.value = time;
