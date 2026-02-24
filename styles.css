@@ -27,20 +27,22 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Malgun Gothic', sans-serif;
-    background-color: #050508;
+    background-color: var(--white);
     color: var(--gray-900);
     line-height: 1.5;
     min-height: 100vh;
 }
 
 /* Neural Network 전역 배경 캔버스 */
+/* 로그인 시: z-index 2 (앱 위, 로그인 오버레이 아래) → 전체 배경 */
+/* 로그인 후: z-index 0 (앱 아래) → 헤더 투과용 */
 #neural-network-canvas {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    z-index: 0;
+    z-index: 2;
     display: block;
 }
 
