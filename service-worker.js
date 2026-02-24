@@ -19,8 +19,8 @@ messaging.onBackgroundMessage((payload) => {
     const { title, body, type } = payload.data || {};
     self.registration.showNotification(title || "DK AS", {
         body: body || "",
-        icon: "./icons/icon-72x72.png",
-        badge: "./icons/icon-72x72.png",
+        icon: "./icons/icon-192x192.png",
+        badge: "./icons/icon-96x96.png",
         tag: type || "default",
         renotify: true,
         data: { url: "./index.html" }
@@ -42,8 +42,8 @@ self.addEventListener("notificationclick", (event) => {
 });
 
 // ===== PWA 캐시 =====
-const CACHE_NAME = 'dk-as-v55';
-const APP_VERSION = '55';
+const CACHE_NAME = 'dk-as-v56';
+const APP_VERSION = '56';
 const urlsToCache = [
   './',
   './index.html',

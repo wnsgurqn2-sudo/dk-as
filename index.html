@@ -17,17 +17,19 @@
     <meta name="apple-mobile-web-app-title" content="DK AS">
 
     <!-- 앱 아이콘 -->
-    <link rel="icon" type="image/png" sizes="72x72" href="icons/icon-72x72.png">
-    <link rel="apple-touch-icon" href="icons/icon-72x72.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="96x96" href="icons/icon-96x96.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192x192.png">
 
-    <link rel="stylesheet" href="styles.css?v=55">
+    <link rel="stylesheet" href="styles.css?v=56">
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js"></script>
-    <script src="firebase-config.js?v=55"></script>
+    <script src="firebase-config.js?v=56"></script>
     <!-- JSZip (사진 일괄 다운로드) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <!-- QR Code 스캔 라이브러리 -->
@@ -43,8 +45,11 @@
         <header class="header">
             <div class="header-content">
                 <div class="header-title">
-                    <h1>DK AS</h1>
-                    <p class="subtitle">임대제품 점검 시스템</p>
+                    <img src="icons/icon-96x96.png" alt="DK" class="header-logo">
+                    <div>
+                        <h1>DK AS</h1>
+                        <p class="subtitle">임대제품 점검 시스템</p>
+                    </div>
                 </div>
                 <button class="header-settings-btn" id="settingsBtn" title="설정">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -442,6 +447,7 @@
     <div class="login-overlay" id="loginOverlay">
         <div class="login-container">
             <div class="login-header">
+                <img src="icons/icon-192x192.png" alt="DK AS" class="login-logo">
                 <h1>DK AS</h1>
                 <p>임대제품 점검 시스템</p>
             </div>
@@ -674,6 +680,7 @@
     <div class="login-overlay" id="pendingApprovalOverlay" style="display: none;">
         <div class="login-container" style="text-align: center;">
             <div class="login-header">
+                <img src="icons/icon-192x192.png" alt="DK AS" class="login-logo">
                 <h1>DK AS</h1>
                 <p>임대제품 점검 시스템</p>
             </div>
@@ -732,8 +739,8 @@
         </div>
     </div>
 
-    <script src="notifications.js?v=55"></script>
-    <script src="app.js?v=55"></script>
+    <script src="notifications.js?v=56"></script>
+    <script src="app.js?v=56"></script>
     <script>
         // Service Worker 등록 (PWA 캐시 + FCM 통합)
         if ('serviceWorker' in navigator) {
