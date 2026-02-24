@@ -22,14 +22,25 @@
     <link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152x152.png">
     <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192x192.png">
 
-    <link rel="stylesheet" href="styles.css?v=56">
+    <link rel="stylesheet" href="styles.css?v=57">
+    <!-- Animate.css -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <!-- Three.js importmap -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"
+        }
+    }
+    </script>
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js"></script>
-    <script src="firebase-config.js?v=56"></script>
+    <script src="firebase-config.js?v=57"></script>
     <!-- JSZip (사진 일괄 다운로드) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <!-- QR Code 스캔 라이브러리 -->
@@ -445,8 +456,8 @@
 
     <!-- 로그인/회원가입 화면 -->
     <div class="login-overlay" id="loginOverlay">
-        <div class="tri-wrap" id="triWrap"></div>
-        <div class="login-container">
+        <canvas id="neural-network-canvas"></canvas>
+        <div class="login-container animate__animated animate__slideInUp">
             <div class="login-header">
                 <img src="icons/icon.png" alt="DK AS" class="login-logo">
                 <p>임대제품 점검 시스템</p>
@@ -678,7 +689,6 @@
 
     <!-- 승인 대기 화면 -->
     <div class="login-overlay" id="pendingApprovalOverlay" style="display: none;">
-        <div class="tri-wrap" id="triWrapPending"></div>
         <div class="login-container" style="text-align: center;">
             <div class="login-header">
                 <img src="icons/icon.png" alt="DK AS" class="login-logo">
@@ -739,44 +749,18 @@
         </div>
     </div>
 
+    <!-- Neural Network 배경 -->
+    <script type="module" src="login-bg.js?v=57"></script>
+    <!-- Google 로그인 클릭 시 slideOutRight 효과 -->
     <script>
-        // 로그인 배경 삼각형 애니메이션 생성
-        (function() {
-            const TOTAL = 200;
-            const TIME = 10;
-            const wrap = document.getElementById('triWrap');
-            if (!wrap) return;
-            const style = document.createElement('style');
-            let css = '';
-            const frag = document.createDocumentFragment();
-            for (let i = 1; i <= TOTAL; i++) {
-                const el = document.createElement('div');
-                el.className = 'tri';
-                frag.appendChild(el);
-                const size = Math.floor(Math.random() * 50) + 1;
-                const rotate = Math.floor(Math.random() * 360);
-                const hue = Math.floor(Math.random() * 360);
-                const tx = Math.floor(Math.random() * 1000);
-                const ty = Math.floor(Math.random() * 1000);
-                const delay = -(i * (TIME / TOTAL));
-                css += `.tri:nth-child(${i}){`
-                    + `border-top:${size}px solid hsl(${hue},100%,50%);`
-                    + `border-right:${size}px solid transparent;`
-                    + `border-left:${size}px solid transparent;`
-                    + `margin-left:-${size/2}px;margin-top:-${size/2}px;`
-                    + `transform:rotate(${rotate}deg) translate3d(0,0,-1500px) scale(0);`
-                    + `animation:ta${i} ${TIME}s infinite linear;`
-                    + `animation-delay:${delay}s;opacity:0;}`
-                    + `@keyframes ta${i}{0%{opacity:1;`
-                    + `transform:rotate(${rotate*1.5}deg) translate3d(${tx}px,${ty}px,1000px) scale(1);}}`;
-            }
-            style.textContent = css;
-            document.head.appendChild(style);
-            wrap.appendChild(frag);
-        })();
+        document.getElementById('googleLoginBtn').addEventListener('click', function() {
+            var container = this.closest('.login-container');
+            container.classList.remove('animate__slideInUp');
+            container.classList.add('animate__slideOutRight');
+        });
     </script>
-    <script src="notifications.js?v=56"></script>
-    <script src="app.js?v=56"></script>
+    <script src="notifications.js?v=57"></script>
+    <script src="app.js?v=57"></script>
     <script>
         // Service Worker 등록 (PWA 캐시 + FCM 통합)
         if ('serviceWorker' in navigator) {

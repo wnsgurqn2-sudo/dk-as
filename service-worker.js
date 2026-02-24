@@ -42,18 +42,20 @@ self.addEventListener("notificationclick", (event) => {
 });
 
 // ===== PWA 캐시 =====
-const CACHE_NAME = 'dk-as-v56';
-const APP_VERSION = '56';
+const CACHE_NAME = 'dk-as-v57';
+const APP_VERSION = '57';
 const urlsToCache = [
   './',
   './index.html',
   './styles.css?v=' + APP_VERSION,
   './app.js?v=' + APP_VERSION,
   './firebase-config.js?v=' + APP_VERSION,
+  './notifications.js?v=' + APP_VERSION,
   './manifest.json',
   'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
-  'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js'
+  'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css'
 ];
 
 // 설치 시 캐시

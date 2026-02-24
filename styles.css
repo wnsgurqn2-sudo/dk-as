@@ -2586,8 +2586,7 @@ body.large-view .rental-history-delete-btn {
     left: 0;
     right: 0;
     bottom: 0;
-    background: black;
-    background-image: radial-gradient(circle at center, white 0%, #222 10%, black 60%);
+    background: #050508;
     z-index: 10000;
     display: flex;
     align-items: center;
@@ -2596,24 +2595,14 @@ body.large-view .rental-history-delete-btn {
     overflow: hidden;
 }
 
-.login-overlay .tri-wrap {
+#neural-network-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
     position: absolute;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
-    transform-style: preserve-3d;
-    perspective: 800px;
-    pointer-events: none;
-}
-
-.login-overlay .tri {
-    height: 0;
-    width: 0;
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    filter: grayscale(1);
+    z-index: 0;
 }
 
 .login-container {
