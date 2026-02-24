@@ -2624,7 +2624,9 @@ body.large-view .rental-history-delete-btn {
     width: 120px;
     height: 120px;
     margin-bottom: 12px;
-    filter: drop-shadow(0 4px 20px rgba(255, 255, 255, 0.3));
+    filter: drop-shadow(0 0 30px rgba(255, 255, 255, 0.8))
+           drop-shadow(0 0 60px rgba(255, 255, 255, 0.5))
+           drop-shadow(0 0 100px rgba(255, 255, 255, 0.3));
 }
 
 .login-header h1 {
