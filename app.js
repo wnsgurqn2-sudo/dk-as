@@ -316,6 +316,12 @@ function showLoginScreen() {
     document.getElementById('loginOverlay').style.display = 'flex';
     document.getElementById('loginForm').style.display = 'block';
     document.getElementById('profileCompleteForm').style.display = 'none';
+    // slideOutRight 후 로그인 실패/취소 시 로그인창 복원
+    const container = document.getElementById('loginContainer');
+    if (container) {
+        container.classList.remove('animate__slideOutRight');
+        container.classList.add('animate__animated', 'animate__slideInUp');
+    }
     hidePendingApproval();
 }
 
