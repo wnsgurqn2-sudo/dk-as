@@ -27,25 +27,40 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Malgun Gothic', sans-serif;
-    background-color: var(--gray-100);
+    background-color: #050508;
     color: var(--gray-900);
     line-height: 1.5;
     min-height: 100vh;
+}
+
+/* Neural Network 전역 배경 캔버스 */
+#neural-network-canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    display: block;
 }
 
 /* ===== 앱 컨테이너 ===== */
 .app-container {
     max-width: 800px;
     margin: 0 auto;
-    background-color: var(--white);
+    background-color: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    position: relative;
+    z-index: 1;
 }
 
 /* ===== 헤더 ===== */
 .header {
-    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.92), rgba(29, 78, 216, 0.92));
     color: var(--white);
     padding: 20px;
     position: relative;
@@ -2586,23 +2601,13 @@ body.large-view .rental-history-delete-btn {
     left: 0;
     right: 0;
     bottom: 0;
-    background: #050508;
+    background: transparent;
     z-index: 10000;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 20px;
     overflow: hidden;
-}
-
-#neural-network-canvas {
-    display: block;
-    width: 100%;
-    height: 100%;
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 0;
 }
 
 .login-container {

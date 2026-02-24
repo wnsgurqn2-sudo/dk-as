@@ -9,7 +9,6 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 const canvas = document.getElementById('neural-network-canvas');
 if (!canvas) throw new Error('Canvas not found');
 
-const overlay = document.getElementById('loginOverlay');
 const isMobile = /Mobi|Android/i.test(navigator.userAgent);
 
 const colorPalettes = [
@@ -501,7 +500,6 @@ canvas.addEventListener('touchstart', e => {
 const clock = new THREE.Clock();
 function animate() {
     requestAnimationFrame(animate);
-    if (overlay && overlay.style.display === 'none') return;
     if (document.hidden) return;
 
     const time = clock.getElapsedTime();
