@@ -2691,8 +2691,11 @@ body.large-view .rental-history-delete-btn {
     padding: 12px;
     font-size: 15px;
     font-weight: 600;
-    color: #333;
-    background: rgba(255, 255, 255, 0.95);
+    color: #fff;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.25);
     border: none;
     border-radius: 10px;
     cursor: pointer;
@@ -2700,7 +2703,7 @@ body.large-view .rental-history-delete-btn {
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
 }
 .btn-google-login:active {
-    background: rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.25);
     transform: scale(0.98);
 }
 .btn-google-login:disabled {
