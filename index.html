@@ -445,6 +445,7 @@
 
     <!-- 로그인/회원가입 화면 -->
     <div class="login-overlay" id="loginOverlay">
+        <div class="tri-wrap" id="triWrap"></div>
         <div class="login-container">
             <div class="login-header">
                 <img src="icons/icon-192x192.png" alt="DK AS" class="login-logo">
@@ -461,7 +462,7 @@
 
             <!-- 프로필 완성 폼 (최초 로그인 시) -->
             <div class="register-form" id="profileCompleteForm" style="display: none;">
-                <p style="text-align:center; color:#666; margin-bottom:16px;">처음 로그인하셨습니다. 정보를 입력해주세요.</p>
+                <p style="text-align:center; color:rgba(255,255,255,0.7); margin-bottom:16px;">처음 로그인하셨습니다. 정보를 입력해주세요.</p>
                 <div class="form-group">
                     <label for="profileName">이름 *</label>
                     <input type="text" id="profileName" placeholder="이름 입력">
@@ -677,6 +678,7 @@
 
     <!-- 승인 대기 화면 -->
     <div class="login-overlay" id="pendingApprovalOverlay" style="display: none;">
+        <div class="tri-wrap" id="triWrapPending"></div>
         <div class="login-container" style="text-align: center;">
             <div class="login-header">
                 <img src="icons/icon-192x192.png" alt="DK AS" class="login-logo">
@@ -684,13 +686,13 @@
             </div>
             <div style="margin: 24px 0;">
                 <div style="font-size: 48px; margin-bottom: 16px;">⏳</div>
-                <h3 style="color: #333; margin-bottom: 8px;">승인 대기 중</h3>
-                <p style="color: #666; font-size: 14px; line-height: 1.6;">
+                <h3 style="color: #fff; margin-bottom: 8px;">승인 대기 중</h3>
+                <p style="color: rgba(255,255,255,0.7); font-size: 14px; line-height: 1.6;">
                     관리자 승인 후 사용할 수 있습니다.<br>
                     잠시만 기다려주세요.
                 </p>
             </div>
-            <button type="button" class="btn-secondary" id="pendingLogoutBtn" style="width: 100%; margin-top: 16px;">로그아웃</button>
+            <button type="button" class="btn-secondary" id="pendingLogoutBtn" style="width: 100%; margin-top: 16px; background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.3);">로그아웃</button>
         </div>
     </div>
 
@@ -737,6 +739,42 @@
         </div>
     </div>
 
+    <script>
+        // 로그인 배경 삼각형 애니메이션 생성
+        (function() {
+            const TOTAL = 200;
+            const TIME = 10;
+            const wrap = document.getElementById('triWrap');
+            if (!wrap) return;
+            const style = document.createElement('style');
+            let css = '';
+            const frag = document.createDocumentFragment();
+            for (let i = 1; i <= TOTAL; i++) {
+                const el = document.createElement('div');
+                el.className = 'tri';
+                frag.appendChild(el);
+                const size = Math.floor(Math.random() * 50) + 1;
+                const rotate = Math.floor(Math.random() * 360);
+                const hue = Math.floor(Math.random() * 360);
+                const tx = Math.floor(Math.random() * 1000);
+                const ty = Math.floor(Math.random() * 1000);
+                const delay = -(i * (TIME / TOTAL));
+                css += `.tri:nth-child(${i}){`
+                    + `border-top:${size}px solid hsl(${hue},100%,50%);`
+                    + `border-right:${size}px solid transparent;`
+                    + `border-left:${size}px solid transparent;`
+                    + `margin-left:-${size/2}px;margin-top:-${size/2}px;`
+                    + `transform:rotate(${rotate}deg) translate3d(0,0,-1500px) scale(0);`
+                    + `animation:ta${i} ${TIME}s infinite linear;`
+                    + `animation-delay:${delay}s;opacity:0;}`
+                    + `@keyframes ta${i}{0%{opacity:1;`
+                    + `transform:rotate(${rotate*1.5}deg) translate3d(${tx}px,${ty}px,1000px) scale(1);}}`;
+            }
+            style.textContent = css;
+            document.head.appendChild(style);
+            wrap.appendChild(frag);
+        })();
+    </script>
     <script src="notifications.js?v=56"></script>
     <script src="app.js?v=56"></script>
     <script>
