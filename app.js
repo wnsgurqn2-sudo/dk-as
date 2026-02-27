@@ -775,20 +775,54 @@ async function deleteAllProductsFromFirestore() {
     }
 }
 
-// ===== Firebase Storage 사진 업로드 =====
-async function uploadPhotosToStorage(photoBase64Array, productId, type) {
+// ===== Firebase Storage 사진 업로드 (진행률 표시) =====
+async function uploadPhotosToStorage(photoBase64Array, productId, type, onProgress) {
     if (!photoBase64Array || photoBase64Array.length === 0) return [];
     const timestamp = Date.now();
-    // 병렬 업로드
-    const promises = photoBase64Array.map(async (photo, i) => {
-        try {
-            const ref = storageInstance.ref(`photos/${productId}/${type}_${timestamp}_${i}`);
-            await ref.putString(photo, 'data_url');
-            return await ref.getDownloadURL();
-        } catch (e) {
-            console.error(`사진 업로드 오류 (${i}):`, e);
-            return null;
-        }
+    const total = photoBase64Array.length;
+    const perFileProgress = new Array(total).fill(0);
+
+    function reportProgress() {
+        if (!onProgress) return;
+        const sum = perFileProgress.reduce((a, b) => a + b, 0);
+        const percent = Math.round(sum / total);
+        onProgress(percent);
+    }
+
+    const promises = photoBase64Array.map((photo, i) => {
+        return new Promise((resolve) => {
+            try {
+                const ref = storageInstance.ref(`photos/${productId}/${type}_${timestamp}_${i}`);
+                const task = ref.putString(photo, 'data_url');
+                task.on('state_changed',
+                    (snapshot) => {
+                        perFileProgress[i] = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+                        reportProgress();
+                    },
+                    (error) => {
+                        console.error(`사진 업로드 오류 (${i}):`, error);
+                        perFileProgress[i] = 100;
+                        reportProgress();
+                        resolve(null);
+                    },
+                    async () => {
+                        perFileProgress[i] = 100;
+                        reportProgress();
+                        try {
+                            const url = await ref.getDownloadURL();
+                            resolve(url);
+                        } catch (e) {
+                            resolve(null);
+                        }
+                    }
+                );
+            } catch (e) {
+                console.error(`사진 업로드 오류 (${i}):`, e);
+                perFileProgress[i] = 100;
+                reportProgress();
+                resolve(null);
+            }
+        });
     });
     const results = await Promise.all(promises);
     return results.filter(url => url !== null);
@@ -1108,10 +1142,12 @@ function initScanActions() {
             saveBtn.disabled = true;
             saveBtn.textContent = '저장 중...';
 
-            // 사진 업로드
+            // 사진 업로드 (진행률 표시)
             let photoUrls = [];
             if (rentalPhotos.length > 0) {
-                photoUrls = await uploadPhotosToStorage(rentalPhotos, currentScannedProduct.id, 'rental');
+                photoUrls = await uploadPhotosToStorage(rentalPhotos, currentScannedProduct.id, 'rental', (percent) => {
+                    saveBtn.textContent = `업로드 ${percent}%`;
+                });
             }
 
             // 제품 임대 처리
@@ -1219,10 +1255,12 @@ function initScanActions() {
             const newRemaining = parseInt(document.getElementById('returnHours').value) || 0;
             const note = document.getElementById('returnNote').value.trim();
 
-            // 사진 업로드
+            // 사진 업로드 (진행률 표시)
             let returnPhotoUrls = [];
             if (returnPhotos.length > 0) {
-                returnPhotoUrls = await uploadPhotosToStorage(returnPhotos, currentScannedProduct.id, 'return');
+                returnPhotoUrls = await uploadPhotosToStorage(returnPhotos, currentScannedProduct.id, 'return', (percent) => {
+                    saveBtn.textContent = `업로드 ${percent}%`;
+                });
             }
 
             // 제품 업데이트
