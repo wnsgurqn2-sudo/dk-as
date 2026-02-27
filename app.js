@@ -322,18 +322,18 @@ function showLoginScreen() {
         container.classList.remove('animate__slideOutRight');
         container.classList.add('animate__animated', 'animate__slideInUp');
     }
-    // 캔버스를 앱 위로 (로그인 배경으로 사용)
+    // 캔버스 표시 (로그인 배경)
     const cvs = document.getElementById('neural-network-canvas');
-    if (cvs) cvs.style.zIndex = '2';
+    if (cvs) { cvs.style.display = 'block'; cvs.style.zIndex = '2'; }
     hidePendingApproval();
 }
 
 function hideLoginScreen() {
     document.getElementById('loginOverlay').style.display = 'none';
     document.getElementById('profileCompleteForm').style.display = 'none';
-    // 캔버스를 앱 아래로 (헤더 투과용으로만 사용)
+    // 로그인 후 캔버스 숨김
     const cvs = document.getElementById('neural-network-canvas');
-    if (cvs) cvs.style.zIndex = '0';
+    if (cvs) cvs.style.display = 'none';
 }
 
 function showPendingApproval() {
