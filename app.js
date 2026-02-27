@@ -2271,6 +2271,20 @@ function updateDashboardList() {
 
         const outsourceBadge = (product.status === '수리중' && product.outsourceRequested) ? '<span class="outsource-badge">외주요청</span>' : '';
 
+        // 임대중: 파란색 라인(% 없음), 그 외: 기존 진행률
+        const progressHtml = product.isRented
+            ? `<div class="item-progress-section">
+                    <div class="item-progress-bar">
+                        <div class="item-progress-fill progress-rental" style="width: 100%"></div>
+                    </div>
+               </div>`
+            : `<div class="item-progress-section">
+                    <div class="item-progress-bar">
+                        <div class="item-progress-fill ${progressClass}" style="width: ${itemProgress}%"></div>
+                    </div>
+                    <span class="item-progress-text">${itemProgress}%</span>
+               </div>`;
+
         return `
             <div class="product-item dashboard-item" data-id="${product.id}">
                 <span class="product-status-badge ${product.isRented ? '임대중' : product.status}"></span>
@@ -2279,12 +2293,7 @@ function updateDashboardList() {
                     <div class="product-id">${esc(product.id)} | 잔여: ${product.remainingHours || product.totalHours}h</div>
                     ${infoHtml}
                     ${product.lastNote ? `<div class="product-note">메모: ${esc(product.lastNote)}</div>` : ''}
-                    <div class="item-progress-section">
-                        <div class="item-progress-bar">
-                            <div class="item-progress-fill ${progressClass}" style="width: ${itemProgress}%"></div>
-                        </div>
-                        <span class="item-progress-text">${itemProgress}%</span>
-                    </div>
+                    ${progressHtml}
                 </div>
                 ${statusHtml}
             </div>
