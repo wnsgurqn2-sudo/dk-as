@@ -145,9 +145,12 @@ const nodeShader = {
     uniform float uTime;uniform vec3 uPulsePositions[3];uniform float uPulseTimes[3];uniform float uPulseSpeed;uniform float uBaseNodeSize;
     varying vec3 vColor;varying float vNodeType;varying vec3 vPosition;varying float vPulseIntensity;varying float vDistanceFromRoot;varying float vGlow;
     float getPulse(vec3 wp,vec3 pp,float pt){
-        if(pt<0.0)return 0.0;float t=uTime-pt;if(t<0.0||t>4.0)return 0.0;
+        if(pt<0.0)return 0.0;float t=uTime-pt;if(t<0.0||t>5.0)return 0.0;
         float pr=t*uPulseSpeed;float d=distance(wp,pp);
-        return smoothstep(3.0,0.0,abs(d-pr))*smoothstep(4.0,0.0,t);
+        float ring=smoothstep(4.0,0.0,abs(d-pr));
+        float timeFade=smoothstep(5.0,0.0,t);
+        float distFade=1.0/(1.0+d*0.08);
+        return ring*timeFade*distFade*1.5;
     }
     void main(){
         vNodeType=nodeType;vColor=nodeColor;vDistanceFromRoot=distanceFromRoot;
@@ -173,8 +176,8 @@ const nodeShader = {
         float bc=0.9+0.1*sin(uTime*0.6+vDistanceFromRoot*0.25);
         vec3 fc=vColor*bc;
         if(vPulseIntensity>0.0){
-            vec3 pc=mix(vec3(1.0),uPulseColors[0],0.4);
-            fc=mix(fc,pc,vPulseIntensity*0.8);fc*=(1.0+vPulseIntensity*1.2);gs*=(1.0+vPulseIntensity);
+            vec3 pc=mix(vec3(1.0),uPulseColors[0],0.3);
+            fc=mix(fc,pc,vPulseIntensity*0.9);fc*=(1.0+vPulseIntensity*2.0);gs*=(1.0+vPulseIntensity*1.5);
         }
         fc+=vec3(1.0)*smoothstep(0.4,0.0,d)*0.3;
         float a=gs*(0.95-0.3*d);
@@ -192,9 +195,12 @@ const connectionShader = {
     uniform float uTime;uniform vec3 uPulsePositions[3];uniform float uPulseTimes[3];uniform float uPulseSpeed;
     varying vec3 vColor;varying float vCS;varying float vPI;varying float vPP;varying float vDC;
     float getPulse(vec3 wp,vec3 pp,float pt){
-        if(pt<0.0)return 0.0;float t=uTime-pt;if(t<0.0||t>4.0)return 0.0;
+        if(pt<0.0)return 0.0;float t=uTime-pt;if(t<0.0||t>5.0)return 0.0;
         float pr=t*uPulseSpeed;float d=distance(wp,pp);
-        return smoothstep(3.0,0.0,abs(d-pr))*smoothstep(4.0,0.0,t);
+        float ring=smoothstep(4.0,0.0,abs(d-pr));
+        float timeFade=smoothstep(5.0,0.0,t);
+        float distFade=1.0/(1.0+d*0.08);
+        return ring*timeFade*distFade*1.5;
     }
     void main(){
         float t=position.x;vPP=t;
