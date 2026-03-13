@@ -75,6 +75,8 @@ let currentScannedProduct = null;
 let currentPhotoType = null; // 'rental' or 'return'
 let rentalPhotos = []; // 임대 사진 배열
 let returnPhotos = []; // 회수 사진 배열
+let editRentalPhotos = []; // 수동 임대 사진 배열
+let editReturnPhotos = []; // 수동 회수 사진 배열
 const MAX_PHOTOS = 20; // 최대 사진 개수
 
 // ===== Firebase 초기화 =====
@@ -121,6 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initRentalHistoryModal();
     initRepairHistoryModal();
     initPhotoCapture();
+    initEditPhotoCapture();
     initDeleteAll();
     initScanActions();
     initSettings();
@@ -574,8 +577,15 @@ function closeRepairHistoryModal() {
 
 // ===== 사진 촬영 =====
 function initPhotoCapture() {
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
     // 임대 - 카메라 버튼
     document.getElementById('rentalCameraBtn').addEventListener('click', () => {
+        if (isMobile) {
+            document.getElementById('rentalCameraInput').setAttribute('capture', 'environment');
+        } else {
+            document.getElementById('rentalCameraInput').removeAttribute('capture');
+        }
         document.getElementById('rentalCameraInput').click();
     });
 
@@ -596,6 +606,11 @@ function initPhotoCapture() {
 
     // 회수 - 카메라 버튼
     document.getElementById('returnCameraBtn').addEventListener('click', () => {
+        if (isMobile) {
+            document.getElementById('returnCameraInput').setAttribute('capture', 'environment');
+        } else {
+            document.getElementById('returnCameraInput').removeAttribute('capture');
+        }
         document.getElementById('returnCameraInput').click();
     });
 
@@ -686,8 +701,125 @@ function clearPhotos() {
     updatePhotoList('return');
 }
 
+// ===== 수동 임대/회수 사진 촬영 (편집 모달) =====
+function initEditPhotoCapture() {
+    // 수동 임대 - 촬영 버튼 (PC: 파일선택, 모바일: 카메라)
+    document.getElementById('editRentalCameraBtn').addEventListener('click', () => {
+        // 모바일에서만 카메라, PC에서는 갤러리와 동일하게 파일선택
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        if (isMobile) {
+            document.getElementById('editRentalCameraInput').setAttribute('capture', 'environment');
+        } else {
+            document.getElementById('editRentalCameraInput').removeAttribute('capture');
+        }
+        document.getElementById('editRentalCameraInput').click();
+    });
+    // 수동 임대 - 갤러리
+    document.getElementById('editRentalGalleryBtn').addEventListener('click', () => {
+        document.getElementById('editRentalGalleryInput').click();
+    });
+    // 수동 임대 - 카메라 입력
+    document.getElementById('editRentalCameraInput').addEventListener('change', (e) => {
+        handleEditPhotoCapture(e, 'editRental');
+    });
+    // 수동 임대 - 갤러리 입력
+    document.getElementById('editRentalGalleryInput').addEventListener('change', (e) => {
+        handleEditPhotoCapture(e, 'editRental');
+    });
+    // 수동 회수 - 촬영 버튼 (PC: 파일선택, 모바일: 카메라)
+    document.getElementById('editReturnCameraBtn').addEventListener('click', () => {
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        if (isMobile) {
+            document.getElementById('editReturnCameraInput').setAttribute('capture', 'environment');
+        } else {
+            document.getElementById('editReturnCameraInput').removeAttribute('capture');
+        }
+        document.getElementById('editReturnCameraInput').click();
+    });
+    // 수동 회수 - 갤러리
+    document.getElementById('editReturnGalleryBtn').addEventListener('click', () => {
+        document.getElementById('editReturnGalleryInput').click();
+    });
+    // 수동 회수 - 카메라 입력
+    document.getElementById('editReturnCameraInput').addEventListener('change', (e) => {
+        handleEditPhotoCapture(e, 'editReturn');
+    });
+    // 수동 회수 - 갤러리 입력
+    document.getElementById('editReturnGalleryInput').addEventListener('change', (e) => {
+        handleEditPhotoCapture(e, 'editReturn');
+    });
+}
+
+function handleEditPhotoCapture(event, type) {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    const photos = type === 'editRental' ? editRentalPhotos : editReturnPhotos;
+    const remainingSlots = MAX_PHOTOS - photos.length;
+
+    if (remainingSlots <= 0) {
+        showToast(`최대 ${MAX_PHOTOS}장까지만 등록 가능합니다.`, 'error');
+        event.target.value = '';
+        return;
+    }
+
+    const filesToProcess = Array.from(files).slice(0, remainingSlots);
+    let processedCount = 0;
+
+    filesToProcess.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            photos.push(e.target.result);
+            processedCount++;
+            if (processedCount === filesToProcess.length) {
+                updateEditPhotoList(type);
+                event.target.value = '';
+                if (files.length > remainingSlots) {
+                    showToast(`${filesToProcess.length}장 등록됨 (최대 ${MAX_PHOTOS}장)`, 'success');
+                }
+            }
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+function updateEditPhotoList(type) {
+    const photos = type === 'editRental' ? editRentalPhotos : editReturnPhotos;
+    const listId = type === 'editRental' ? 'editRentalPhotoList' : 'editReturnPhotoList';
+    const countId = type === 'editRental' ? 'editRentalPhotoCount' : 'editReturnPhotoCount';
+
+    document.getElementById(countId).textContent = photos.length;
+
+    const listDiv = document.getElementById(listId);
+    if (photos.length === 0) {
+        listDiv.innerHTML = '';
+        return;
+    }
+
+    listDiv.innerHTML = photos.map((photo, index) => `
+        <div class="photo-item">
+            <img src="${photo}" alt="사진 ${index + 1}">
+            <button type="button" class="photo-delete-btn" onclick="deleteEditPhoto('${type}', ${index})">×</button>
+        </div>
+    `).join('');
+}
+
+function deleteEditPhoto(type, index) {
+    const photos = type === 'editRental' ? editRentalPhotos : editReturnPhotos;
+    photos.splice(index, 1);
+    updateEditPhotoList(type);
+}
+
+function clearEditPhotos() {
+    editRentalPhotos = [];
+    editReturnPhotos = [];
+    updateEditPhotoList('editRental');
+    updateEditPhotoList('editReturn');
+}
+
 // 전역 함수 노출
 window.deletePhoto = deletePhoto;
+window.deleteEditPhoto = deleteEditPhoto;
 
 // ===== 데이터 관리 (Firestore) =====
 async function loadData() {
@@ -2731,7 +2863,7 @@ function initEditProductModal() {
         showRepairHistory(currentEditProduct.id);
     });
 
-    saveBtn.addEventListener('click', () => {
+    saveBtn.addEventListener('click', async () => {
         if (!currentEditProduct) return;
 
         const newStatus = document.getElementById('editProductStatus').value;
@@ -2783,6 +2915,10 @@ function initEditProductModal() {
         if (productIndex !== -1) {
             const previousStatus = products[productIndex].status;
 
+            try {
+                saveBtn.disabled = true;
+                saveBtn.textContent = '저장 중...';
+
             // === 수동 임대회수 처리 ===
             if (newStatus === '임대회수') {
                 const returnStatus = document.getElementById('editReturnStatus').value;
@@ -2790,6 +2926,14 @@ function initEditProductModal() {
                 const previousRemaining = products[productIndex].remainingHours || products[productIndex].totalHours;
                 const usedHours = Math.abs(previousRemaining - newRemaining);
                 const company = products[productIndex].rentalCompany;
+
+                // 회수 사진 업로드
+                let returnPhotoUrls = [];
+                if (editReturnPhotos.length > 0) {
+                    returnPhotoUrls = await uploadPhotosToStorage(editReturnPhotos, currentEditProduct.id, 'return', (percent) => {
+                        saveBtn.textContent = `업로드 ${percent}%`;
+                    });
+                }
 
                 // 현재 임대 기록 업데이트
                 if (products[productIndex].rentalHistory && products[productIndex].currentRentalIndex !== undefined) {
@@ -2799,7 +2943,7 @@ function initEditProductModal() {
                         currentRental.usedHours = usedHours;
                         currentRental.remainingHoursAtReturn = newRemaining;
                         currentRental.note = newNote;
-                        currentRental.returnPhotos = [];
+                        currentRental.returnPhotos = returnPhotoUrls;
                     }
                 }
 
@@ -2838,12 +2982,21 @@ function initEditProductModal() {
             // === 수동 임대 처리 ===
             else if (newStatus === '임대') {
                 const rentalCompany = document.getElementById('editRentalCompany').value.trim();
+
+                // 임대 사진 업로드
+                let rentalPhotoUrls = [];
+                if (editRentalPhotos.length > 0) {
+                    rentalPhotoUrls = await uploadPhotosToStorage(editRentalPhotos, currentEditProduct.id, 'rental', (percent) => {
+                        saveBtn.textContent = `업로드 ${percent}%`;
+                    });
+                }
+
                 const rentalRecord = {
                     type: '임대',
                     company: rentalCompany,
                     rentalDate: new Date().toISOString(),
                     remainingHoursAtRental: products[productIndex].remainingHours || products[productIndex].totalHours,
-                    photos: []
+                    photos: rentalPhotoUrls
                 };
 
                 if (!products[productIndex].rentalHistory) {
@@ -2933,6 +3086,15 @@ function initEditProductModal() {
                 }
 
                 showToast(`${currentEditProduct.name} 정보가 수정되었습니다.`, 'success');
+            }
+
+            } catch (e) {
+                console.error('수동 처리 저장 오류:', e);
+                showToast('저장 중 오류가 발생했습니다.', 'error');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = '저장';
+                clearEditPhotos();
             }
         }
 
@@ -3191,6 +3353,7 @@ function openEditProductModal(productId) {
     if (!product) return;
 
     currentEditProduct = product;
+    clearEditPhotos();
 
     document.getElementById('editProductName').textContent = product.name;
     document.getElementById('editProductDetails').textContent =
@@ -3206,8 +3369,8 @@ function openEditProductModal(productId) {
     document.getElementById('editReturnStatus').value = '';
     document.getElementById('editReturnUsedInfo').innerHTML = '';
 
-    if (product.isRented && canManualRental()) {
-        // 수동임대 권한 있으면 → 회수 옵션 제공
+    if (product.isRented) {
+        // 임대중인 제품: 모든 사용자가 수동 회수 가능
         statusSelect.disabled = false;
         statusSelect.innerHTML = `
             <option value="임대중">임대중</option>
@@ -3215,11 +3378,6 @@ function openEditProductModal(productId) {
         `;
         statusSelect.value = '임대중';
         statusFormGroup.classList.remove('disabled');
-    } else if (product.isRented) {
-        statusSelect.disabled = true;
-        statusSelect.innerHTML = '<option value="임대중">임대중</option>';
-        statusSelect.value = '임대중';
-        statusFormGroup.classList.add('disabled');
     } else {
         statusSelect.disabled = false;
         const rentalOption = canManualRental()

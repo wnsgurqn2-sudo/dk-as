@@ -276,7 +276,7 @@
                                         <span>🖼️</span> 갤러리
                                     </button>
                                 </div>
-                                <input type="file" id="rentalCameraInput" accept="image/*" capture="environment" multiple style="display: none;">
+                                <input type="file" id="rentalCameraInput" accept="image/*" multiple style="display: none;">
                                 <input type="file" id="rentalGalleryInput" accept="image/*" multiple style="display: none;">
                                 <div id="rentalPhotoList" class="photo-list"></div>
                             </div>
@@ -305,7 +305,7 @@
                                         <span>🖼️</span> 갤러리
                                     </button>
                                 </div>
-                                <input type="file" id="returnCameraInput" accept="image/*" capture="environment" multiple style="display: none;">
+                                <input type="file" id="returnCameraInput" accept="image/*" multiple style="display: none;">
                                 <input type="file" id="returnGalleryInput" accept="image/*" multiple style="display: none;">
                                 <div id="returnPhotoList" class="photo-list"></div>
                             </div>
@@ -542,12 +542,44 @@
                 <div class="form-group" id="editRentalCompanyGroup" style="display: none;">
                     <label for="editRentalCompany">임대 업체명 *</label>
                     <input type="text" id="editRentalCompany" placeholder="업체명 입력">
+                    <div class="form-group" style="margin-top: 8px;">
+                        <label>임대 전 상태사진 (<span id="editRentalPhotoCount">0</span>/20)</label>
+                        <div class="photo-capture-section">
+                            <div class="photo-btn-group">
+                                <button type="button" class="btn-photo-camera" id="editRentalCameraBtn">
+                                    <span>📷</span> 촬영
+                                </button>
+                                <button type="button" class="btn-photo-gallery" id="editRentalGalleryBtn">
+                                    <span>🖼️</span> 갤러리
+                                </button>
+                            </div>
+                            <input type="file" id="editRentalCameraInput" accept="image/*" multiple style="display: none;">
+                            <input type="file" id="editRentalGalleryInput" accept="image/*" multiple style="display: none;">
+                            <div id="editRentalPhotoList" class="photo-list"></div>
+                        </div>
+                    </div>
                 </div>
                 <div id="editReturnGroup" style="display: none;">
                     <div class="form-group">
                         <label for="editReturnHours">회수 후 잔여시간 *</label>
                         <input type="number" id="editReturnHours" placeholder="잔여시간 입력" min="0">
                         <div id="editReturnUsedInfo" style="font-size:12px; color:#666; margin-top:4px;"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>회수 후 상태사진 (<span id="editReturnPhotoCount">0</span>/20)</label>
+                        <div class="photo-capture-section">
+                            <div class="photo-btn-group">
+                                <button type="button" class="btn-photo-camera" id="editReturnCameraBtn">
+                                    <span>📷</span> 촬영
+                                </button>
+                                <button type="button" class="btn-photo-gallery" id="editReturnGalleryBtn">
+                                    <span>🖼️</span> 갤러리
+                                </button>
+                            </div>
+                            <input type="file" id="editReturnCameraInput" accept="image/*" multiple style="display: none;">
+                            <input type="file" id="editReturnGalleryInput" accept="image/*" multiple style="display: none;">
+                            <div id="editReturnPhotoList" class="photo-list"></div>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label>회수 후 상태 *</label>
