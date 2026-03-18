@@ -2843,7 +2843,27 @@ async function downloadQRJpg() {
 
             // 원본 캔버스 생성 (회전 전)
             const padding = Math.round(qrSize * 0.08);
-            const textAreaHeight = includeInfo ? Math.round(qrSize * 0.18) : 0;
+
+            // 텍스트 크기 먼저 계산하여 캔버스 높이 결정
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            const nameFontSize = Math.max(Math.round(qrSize * 0.05), 12);
+            let snFontSize = 0;
+            let textAreaHeight = 0;
+
+            if (includeInfo) {
+                const snText = `SN: ${snLabel}`;
+                const maxTextWidth = qrSize; // QR 크기 기준
+                snFontSize = Math.round(qrSize * 0.12);
+                tempCtx.font = `bold ${snFontSize}px "맑은 고딕", sans-serif`;
+                while (tempCtx.measureText(snText).width > maxTextWidth && snFontSize > 10) {
+                    snFontSize--;
+                    tempCtx.font = `bold ${snFontSize}px "맑은 고딕", sans-serif`;
+                }
+                // 텍스트 영역: 제품명 + 간격 + 시리얼넘버 + 하단 여백
+                textAreaHeight = nameFontSize + 8 + snFontSize + padding;
+            }
+
             const origWidth = qrSize + padding * 2;
             const origHeight = qrSize + padding * 2 + textAreaHeight;
 
@@ -2861,27 +2881,20 @@ async function downloadQRJpg() {
 
             // 제품정보 텍스트
             if (includeInfo) {
-                const fontSize = Math.max(Math.round(qrSize * 0.05), 12);
-                const smallFontSize = Math.max(Math.round(qrSize * 0.04), 10);
-                const textY = qrSize + padding * 2 + Math.round(textAreaHeight * 0.1);
+                const textY = qrSize + padding + padding / 2;
 
-                origCtx.fillStyle = '#333333';
                 origCtx.textAlign = 'center';
 
-                origCtx.font = `bold ${fontSize}px "맑은 고딕", sans-serif`;
-                origCtx.fillText(productName, origWidth / 2, textY + fontSize);
+                // 제품명
+                origCtx.fillStyle = '#333333';
+                origCtx.font = `bold ${nameFontSize}px "맑은 고딕", sans-serif`;
+                origCtx.fillText(productName, origWidth / 2, textY + nameFontSize);
 
-                // 시리얼넘버: 가로 폭에 맞춰 폰트 크기 자동 조절
+                // 시리얼넘버
                 const snText = `SN: ${snLabel}`;
-                const maxTextWidth = origWidth - padding * 2;
-                let snFontSize = Math.round(qrSize * 0.12); // 시작 크기 (크게)
                 origCtx.font = `bold ${snFontSize}px "맑은 고딕", sans-serif`;
-                while (origCtx.measureText(snText).width > maxTextWidth && snFontSize > 10) {
-                    snFontSize--;
-                    origCtx.font = `bold ${snFontSize}px "맑은 고딕", sans-serif`;
-                }
                 origCtx.fillStyle = '#000000';
-                origCtx.fillText(snText, origWidth / 2, textY + fontSize + snFontSize + 4);
+                origCtx.fillText(snText, origWidth / 2, textY + nameFontSize + 8 + snFontSize);
             }
 
             // 회전 적용
