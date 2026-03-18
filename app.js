@@ -2485,6 +2485,17 @@ function initQRPrint() {
     document.getElementById('btnExportQRExcel').addEventListener('click', exportQRExcel);
     // JPG 개별 다운로드
     document.getElementById('btnDownloadQRJpg').addEventListener('click', downloadQRJpg);
+
+    // 회전 버튼 클릭 시 90도씩 회전
+    document.getElementById('btnQrRotatePreview').addEventListener('click', () => {
+        const select = document.getElementById('qrJpgRotation');
+        const current = parseInt(select.value);
+        const next = (current + 90) % 360;
+        select.value = next.toString();
+        updateQrRotationPreview();
+    });
+    // 드롭다운 변경 시 미리보기 갱신
+    document.getElementById('qrJpgRotation').addEventListener('change', updateQrRotationPreview);
 }
 
 function openQRPrintModal() {
@@ -2733,6 +2744,58 @@ async function exportQRExcel() {
     }
 }
 
+// ===== QR 회전 미리보기 =====
+function updateQrRotationPreview() {
+    const rotation = parseInt(document.getElementById('qrJpgRotation').value) || 0;
+    const previewDiv = document.getElementById('qrRotationPreview');
+    const canvas = document.getElementById('qrPreviewCanvas');
+    const ctx = canvas.getContext('2d');
+    const size = 120;
+
+    previewDiv.style.display = 'block';
+
+    // 90/270도 회전 시 캔버스 가로세로 교체
+    if (rotation === 90 || rotation === 270) {
+        canvas.width = size * 0.7;
+        canvas.height = size;
+    } else {
+        canvas.width = size;
+        canvas.height = size;
+    }
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate((rotation * Math.PI) / 180);
+
+    // 샘플 QR 패턴 그리기
+    const qrSize = size * 0.6;
+    ctx.fillStyle = '#333';
+    ctx.fillRect(-qrSize / 2, -qrSize / 2, qrSize, qrSize);
+    ctx.fillStyle = '#FFF';
+    ctx.fillRect(-qrSize / 2 + 4, -qrSize / 2 + 4, qrSize - 8, qrSize - 8);
+    ctx.fillStyle = '#333';
+    // 코너 패턴
+    const corner = qrSize * 0.25;
+    ctx.fillRect(-qrSize / 2 + 2, -qrSize / 2 + 2, corner, corner);
+    ctx.fillRect(qrSize / 2 - corner - 2, -qrSize / 2 + 2, corner, corner);
+    ctx.fillRect(-qrSize / 2 + 2, qrSize / 2 - corner - 2, corner, corner);
+    // 중앙 도트
+    ctx.fillRect(-4, -4, 8, 8);
+
+    // 방향 표시 화살표 (위쪽)
+    ctx.fillStyle = '#2563eb';
+    ctx.beginPath();
+    ctx.moveTo(0, -qrSize / 2 - 8);
+    ctx.lineTo(-6, -qrSize / 2 + 2);
+    ctx.lineTo(6, -qrSize / 2 + 2);
+    ctx.fill();
+
+    ctx.restore();
+}
+
 // ===== QR JPG 개별 다운로드 =====
 async function downloadQRJpg() {
     const selectedProducts = products.filter(p => qrPrintSelectedIds.has(p.id));
@@ -2743,6 +2806,7 @@ async function downloadQRJpg() {
 
     const qrSize = parseInt(document.getElementById('qrJpgSize').value) || 512;
     const includeInfo = document.getElementById('qrJpgIncludeInfo').value === 'yes';
+    const rotation = parseInt(document.getElementById('qrJpgRotation').value) || 0;
 
     const btn = document.getElementById('btnDownloadQRJpg');
     btn.disabled = true;
@@ -2777,23 +2841,23 @@ async function downloadQRJpg() {
                 continue;
             }
 
-            // 최종 캔버스 생성
+            // 원본 캔버스 생성 (회전 전)
             const padding = Math.round(qrSize * 0.08);
             const textAreaHeight = includeInfo ? Math.round(qrSize * 0.18) : 0;
-            const canvasWidth = qrSize + padding * 2;
-            const canvasHeight = qrSize + padding * 2 + textAreaHeight;
+            const origWidth = qrSize + padding * 2;
+            const origHeight = qrSize + padding * 2 + textAreaHeight;
 
-            const canvas = document.createElement('canvas');
-            canvas.width = canvasWidth;
-            canvas.height = canvasHeight;
-            const ctx = canvas.getContext('2d');
+            const origCanvas = document.createElement('canvas');
+            origCanvas.width = origWidth;
+            origCanvas.height = origHeight;
+            const origCtx = origCanvas.getContext('2d');
 
             // 배경 흰색
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+            origCtx.fillStyle = '#FFFFFF';
+            origCtx.fillRect(0, 0, origWidth, origHeight);
 
             // QR 코드 그리기
-            ctx.drawImage(qrCanvas, 0, 0, qrSize, qrSize, padding, padding, qrSize, qrSize);
+            origCtx.drawImage(qrCanvas, 0, 0, qrSize, qrSize, padding, padding, qrSize, qrSize);
 
             // 제품정보 텍스트
             if (includeInfo) {
@@ -2801,21 +2865,35 @@ async function downloadQRJpg() {
                 const smallFontSize = Math.max(Math.round(qrSize * 0.04), 10);
                 const textY = qrSize + padding * 2 + Math.round(textAreaHeight * 0.1);
 
-                ctx.fillStyle = '#333333';
-                ctx.textAlign = 'center';
+                origCtx.fillStyle = '#333333';
+                origCtx.textAlign = 'center';
 
-                // 제품명
-                ctx.font = `bold ${fontSize}px "맑은 고딕", sans-serif`;
-                ctx.fillText(productName, canvasWidth / 2, textY + fontSize);
+                origCtx.font = `bold ${fontSize}px "맑은 고딕", sans-serif`;
+                origCtx.fillText(productName, origWidth / 2, textY + fontSize);
 
-                // 시리얼넘버
-                ctx.font = `${smallFontSize}px "맑은 고딕", sans-serif`;
-                ctx.fillStyle = '#666666';
-                ctx.fillText(`SN: ${snLabel}`, canvasWidth / 2, textY + fontSize + smallFontSize + 4);
+                origCtx.font = `${smallFontSize}px "맑은 고딕", sans-serif`;
+                origCtx.fillStyle = '#666666';
+                origCtx.fillText(`SN: ${snLabel}`, origWidth / 2, textY + fontSize + smallFontSize + 4);
             }
 
+            // 회전 적용
+            const finalCanvas = document.createElement('canvas');
+            const isRotated90or270 = (rotation === 90 || rotation === 270);
+            finalCanvas.width = isRotated90or270 ? origHeight : origWidth;
+            finalCanvas.height = isRotated90or270 ? origWidth : origHeight;
+            const finalCtx = finalCanvas.getContext('2d');
+
+            finalCtx.fillStyle = '#FFFFFF';
+            finalCtx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+
+            finalCtx.save();
+            finalCtx.translate(finalCanvas.width / 2, finalCanvas.height / 2);
+            finalCtx.rotate((rotation * Math.PI) / 180);
+            finalCtx.drawImage(origCanvas, -origWidth / 2, -origHeight / 2);
+            finalCtx.restore();
+
             // JPG 다운로드
-            const jpgDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+            const jpgDataUrl = finalCanvas.toDataURL('image/jpeg', 0.95);
             const a = document.createElement('a');
             a.href = jpgDataUrl;
             a.download = `QR_${productName}_${snLabel}.jpg`;
