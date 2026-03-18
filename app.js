@@ -2871,9 +2871,17 @@ async function downloadQRJpg() {
                 origCtx.font = `bold ${fontSize}px "맑은 고딕", sans-serif`;
                 origCtx.fillText(productName, origWidth / 2, textY + fontSize);
 
-                origCtx.font = `bold ${fontSize}px "맑은 고딕", sans-serif`;
+                // 시리얼넘버: 가로 폭에 맞춰 폰트 크기 자동 조절
+                const snText = `SN: ${snLabel}`;
+                const maxTextWidth = origWidth - padding * 2;
+                let snFontSize = Math.round(qrSize * 0.12); // 시작 크기 (크게)
+                origCtx.font = `bold ${snFontSize}px "맑은 고딕", sans-serif`;
+                while (origCtx.measureText(snText).width > maxTextWidth && snFontSize > 10) {
+                    snFontSize--;
+                    origCtx.font = `bold ${snFontSize}px "맑은 고딕", sans-serif`;
+                }
                 origCtx.fillStyle = '#000000';
-                origCtx.fillText(`SN: ${snLabel}`, origWidth / 2, textY + fontSize + fontSize + 4);
+                origCtx.fillText(snText, origWidth / 2, textY + fontSize + snFontSize + 4);
             }
 
             // 회전 적용
