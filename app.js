@@ -2897,11 +2897,14 @@ async function downloadQRJpg() {
                 origCtx.fillText(snText, origWidth / 2, textY + nameFontSize + 8 + snFontSize);
             }
 
-            // 회전 적용
+            // 회전 적용 - 회전 후 정확한 바운딩 박스 계산
             const finalCanvas = document.createElement('canvas');
-            const isRotated90or270 = (rotation === 90 || rotation === 270);
-            finalCanvas.width = isRotated90or270 ? origHeight : origWidth;
-            finalCanvas.height = isRotated90or270 ? origWidth : origHeight;
+            const rad = (rotation * Math.PI) / 180;
+            const absCos = Math.abs(Math.cos(rad));
+            const absSin = Math.abs(Math.sin(rad));
+            // 회전 후 필요한 정확한 크기
+            finalCanvas.width = Math.round(origWidth * absCos + origHeight * absSin);
+            finalCanvas.height = Math.round(origWidth * absSin + origHeight * absCos);
             const finalCtx = finalCanvas.getContext('2d');
 
             finalCtx.fillStyle = '#FFFFFF';
@@ -2909,7 +2912,7 @@ async function downloadQRJpg() {
 
             finalCtx.save();
             finalCtx.translate(finalCanvas.width / 2, finalCanvas.height / 2);
-            finalCtx.rotate((rotation * Math.PI) / 180);
+            finalCtx.rotate(rad);
             finalCtx.drawImage(origCanvas, -origWidth / 2, -origHeight / 2);
             finalCtx.restore();
 
