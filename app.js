@@ -2871,9 +2871,9 @@ async function downloadQRJpg() {
                 origCtx.font = `bold ${fontSize}px "맑은 고딕", sans-serif`;
                 origCtx.fillText(productName, origWidth / 2, textY + fontSize);
 
-                origCtx.font = `${smallFontSize}px "맑은 고딕", sans-serif`;
-                origCtx.fillStyle = '#666666';
-                origCtx.fillText(`SN: ${snLabel}`, origWidth / 2, textY + fontSize + smallFontSize + 4);
+                origCtx.font = `bold ${fontSize}px "맑은 고딕", sans-serif`;
+                origCtx.fillStyle = '#000000';
+                origCtx.fillText(`SN: ${snLabel}`, origWidth / 2, textY + fontSize + fontSize + 4);
             }
 
             // 회전 적용
