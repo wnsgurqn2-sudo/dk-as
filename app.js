@@ -2483,6 +2483,8 @@ function initQRPrint() {
 
     // 엑셀 내보내기
     document.getElementById('btnExportQRExcel').addEventListener('click', exportQRExcel);
+    // JPG 개별 다운로드
+    document.getElementById('btnDownloadQRJpg').addEventListener('click', downloadQRJpg);
 }
 
 function openQRPrintModal() {
@@ -2550,6 +2552,7 @@ function updateQRPrintSelectionUI() {
     document.getElementById('qrPrintSelectedCount').textContent = count;
     document.getElementById('qrPrintSettings').style.display = count > 0 ? 'block' : 'none';
     document.getElementById('btnExportQRExcel').disabled = count === 0;
+    document.getElementById('btnDownloadQRJpg').disabled = count === 0;
 
     // 선택된 항목 시각적 표시
     document.querySelectorAll('.qr-print-item').forEach(item => {
@@ -2727,6 +2730,114 @@ async function exportQRExcel() {
     } finally {
         btn.disabled = false;
         btn.textContent = '엑셀 내보내기';
+    }
+}
+
+// ===== QR JPG 개별 다운로드 =====
+async function downloadQRJpg() {
+    const selectedProducts = products.filter(p => qrPrintSelectedIds.has(p.id));
+    if (selectedProducts.length === 0) {
+        showToast('선택된 제품이 없습니다.', 'error');
+        return;
+    }
+
+    const qrSize = parseInt(document.getElementById('qrJpgSize').value) || 512;
+    const includeInfo = document.getElementById('qrJpgIncludeInfo').value === 'yes';
+
+    const btn = document.getElementById('btnDownloadQRJpg');
+    btn.disabled = true;
+    btn.textContent = '생성 중...';
+
+    const tempDiv = document.createElement('div');
+    tempDiv.style.cssText = 'position:absolute;left:-9999px;top:-9999px;';
+    document.body.appendChild(tempDiv);
+
+    let downloadCount = 0;
+
+    try {
+        for (const product of selectedProducts) {
+            const qrData = product.id;
+            const snLabel = product.serialNumber || product.productId || product.id;
+            const productName = product.name || '제품';
+
+            // QR 코드 생성
+            const qrContainer = document.createElement('div');
+            tempDiv.appendChild(qrContainer);
+            new QRCode(qrContainer, {
+                text: qrData,
+                width: qrSize,
+                height: qrSize,
+                correctLevel: QRCode.CorrectLevel.H
+            });
+            await new Promise(r => setTimeout(r, 150));
+
+            const qrCanvas = qrContainer.querySelector('canvas');
+            if (!qrCanvas) {
+                tempDiv.removeChild(qrContainer);
+                continue;
+            }
+
+            // 최종 캔버스 생성
+            const padding = Math.round(qrSize * 0.08);
+            const textAreaHeight = includeInfo ? Math.round(qrSize * 0.18) : 0;
+            const canvasWidth = qrSize + padding * 2;
+            const canvasHeight = qrSize + padding * 2 + textAreaHeight;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            const ctx = canvas.getContext('2d');
+
+            // 배경 흰색
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+            // QR 코드 그리기
+            ctx.drawImage(qrCanvas, 0, 0, qrSize, qrSize, padding, padding, qrSize, qrSize);
+
+            // 제품정보 텍스트
+            if (includeInfo) {
+                const fontSize = Math.max(Math.round(qrSize * 0.05), 12);
+                const smallFontSize = Math.max(Math.round(qrSize * 0.04), 10);
+                const textY = qrSize + padding * 2 + Math.round(textAreaHeight * 0.1);
+
+                ctx.fillStyle = '#333333';
+                ctx.textAlign = 'center';
+
+                // 제품명
+                ctx.font = `bold ${fontSize}px "맑은 고딕", sans-serif`;
+                ctx.fillText(productName, canvasWidth / 2, textY + fontSize);
+
+                // 시리얼넘버
+                ctx.font = `${smallFontSize}px "맑은 고딕", sans-serif`;
+                ctx.fillStyle = '#666666';
+                ctx.fillText(`SN: ${snLabel}`, canvasWidth / 2, textY + fontSize + smallFontSize + 4);
+            }
+
+            // JPG 다운로드
+            const jpgDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+            const a = document.createElement('a');
+            a.href = jpgDataUrl;
+            a.download = `QR_${productName}_${snLabel}.jpg`;
+            a.click();
+
+            downloadCount++;
+            tempDiv.removeChild(qrContainer);
+
+            // 여러 파일 연속 다운로드 시 브라우저 차단 방지
+            if (selectedProducts.length > 1) {
+                await new Promise(r => setTimeout(r, 300));
+            }
+        }
+
+        document.body.removeChild(tempDiv);
+        showToast(`${downloadCount}개 QR 코드 JPG가 다운로드되었습니다.`, 'success');
+    } catch (e) {
+        console.error('JPG 다운로드 실패:', e);
+        showToast('JPG 다운로드 실패: ' + e.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'JPG 다운로드';
     }
 }
 
