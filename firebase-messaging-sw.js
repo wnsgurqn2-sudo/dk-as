@@ -1,4 +1,10 @@
 // Firebase Messaging Service Worker for DK AS
+// [참고] 이 파일은 사용되지 않습니다.
+// FCM 백그라운드 메시지 처리는 service-worker.js에 통합되어 있습니다.
+// notifications.js에서 serviceWorkerRegistration을 명시적으로 전달하므로
+// Firebase가 이 파일을 자동 탐색하지 않습니다.
+// 안전을 위해 파일은 유지하되, 실제 로직은 service-worker.js를 참조하세요.
+//
 // 백그라운드 푸시 알림 처리 (앱이 꺼져있어도 동작)
 
 importScripts("https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js");

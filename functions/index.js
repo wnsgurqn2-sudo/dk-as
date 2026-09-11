@@ -35,7 +35,8 @@ exports.processNotification = onDocumentCreated(
         try {
             const alreadyProcessed = await db.runTransaction(async (transaction) => {
                 const freshDoc = await transaction.get(docRef);
-                if (!freshDoc.exists || freshDoc.data().processed === true) {
+                // 문서가 없거나 이미 처리 중/완료 상태이면 차단
+                if (!freshDoc.exists || freshDoc.data().processed) {
                     return true;
                 }
                 transaction.update(docRef, { processed: "processing" });
@@ -58,10 +59,18 @@ exports.processNotification = onDocumentCreated(
             const actorDoc = await db.collection("users").doc(actorUid).get();
             if (!actorDoc.exists) {
                 console.error("행동자 문서 없음:", actorUid);
-                await docRef.update({ processed: true, error: "actor not found" });
+                try { await docRef.delete(); } catch (e) {}
                 return;
             }
             const actor = actorDoc.data();
+
+            // 미승인 계정은 알림을 발송할 수 없음 (규칙을 우회한 직접 쓰기 방어)
+            if (actor.approved !== true) {
+                console.warn("미승인 행동자의 알림 요청 차단:", actorUid);
+                try { await docRef.delete(); } catch (e) {}
+                return;
+            }
+
             const actorRole = actor.role || "user"; // role 필드 없으면 기본값 user
             const actorName = actor.name || actor.email;
             console.log(`행동자: ${actorName}, 역할: ${actorRole}`);
@@ -114,34 +123,32 @@ exports.processNotification = onDocumentCreated(
 
             if (recipientUids.size === 0) {
                 console.log("수신자 없음, 종료");
-                await docRef.update({ processed: true, recipientCount: 0 });
+                try { await docRef.delete(); } catch (e) {}
                 return;
             }
 
-            // 수신자별 알림 설정 확인 후 필터링
+            // 수신자별 알림 설정 일괄 확인 (N+1 → 일괄 조회)
             const filteredUids = new Set();
-            for (const uid of recipientUids) {
-                const userDoc = await db.collection("users").doc(uid).get();
-                if (!userDoc.exists) continue;
-                const userData = userDoc.data();
-                const settings = userData.notificationSettings;
-
-                if (!settings) {
-                    filteredUids.add(uid);
-                    continue;
-                }
-
-                if (settings[type] !== false) {
-                    filteredUids.add(uid);
-                } else {
-                    console.log(`  ${uid}: ${type} 알림 비활성화됨`);
+            const recipientRefs = Array.from(recipientUids).map(uid => db.collection("users").doc(uid));
+            if (recipientRefs.length > 0) {
+                const userDocs = await db.getAll(...recipientRefs);
+                for (const userDoc of userDocs) {
+                    if (!userDoc.exists) continue;
+                    const userData = userDoc.data();
+                    const settings = userData.notificationSettings;
+                    if (!settings || settings[type] !== false) {
+                        filteredUids.add(userDoc.id);
+                    } else {
+                        console.log(`  ${userDoc.id}: ${type} 알림 비활성화됨`);
+                    }
                 }
             }
 
             console.log(`알림 설정 필터 후 수신자: ${filteredUids.size}명`);
 
             if (filteredUids.size === 0) {
-                await docRef.update({ processed: true, recipientCount: recipientUids.size, filteredOut: true });
+                console.log("필터 후 수신자 없음, 종료");
+                try { await docRef.delete(); } catch (e) {}
                 return;
             }
 
@@ -149,25 +156,27 @@ exports.processNotification = onDocumentCreated(
             const { title, body } = buildNotificationContent(type, actorName, productName, extraData || {});
             console.log(`알림 내용: ${title} - ${body}`);
 
-            // FCM 토큰 수집
+            // FCM 토큰 병렬 수집
             const tokens = [];
-            for (const uid of filteredUids) {
-                const tokenSnap = await db.collection("users").doc(uid)
-                    .collection("fcmTokens").get();
-                console.log(`  ${uid}: FCM 토큰 ${tokenSnap.size}개`);
+            const tokenResults = await Promise.all(
+                Array.from(filteredUids).map(uid =>
+                    db.collection("users").doc(uid).collection("fcmTokens").get()
+                )
+            );
+            tokenResults.forEach(tokenSnap => {
                 tokenSnap.forEach(doc => {
                     const tokenData = doc.data();
                     if (tokenData.token) {
                         tokens.push({ token: tokenData.token, ref: doc.ref });
                     }
                 });
-            }
+            });
 
             console.log(`총 FCM 토큰: ${tokens.length}개`);
 
             if (tokens.length === 0) {
                 console.log("FCM 토큰 없음, 종료");
-                await docRef.update({ processed: true, recipientCount: filteredUids.size, tokenCount: 0 });
+                try { await docRef.delete(); } catch (e) {}
                 return;
             }
 
@@ -196,18 +205,22 @@ exports.processNotification = onDocumentCreated(
             const failCount = sendResults.filter(r => r.status === "rejected").length;
             console.log(`FCM 전송 결과: 성공 ${successCount}, 실패 ${failCount}`);
 
-            await docRef.update({
-                processed: true,
-                recipientCount: filteredUids.size,
-                tokenCount: tokens.length,
-                successCount
-            });
+            console.log(`=== processNotification 완료 (수신: ${filteredUids.size}, 토큰: ${tokens.length}, 성공: ${successCount}) ===`);
 
-            console.log("=== processNotification 완료 ===");
+            // 처리 완료 후 문서 즉시 삭제
+            // (멱등성은 위 트랜잭션의 !freshDoc.exists 체크로 보호됨)
+            try {
+                await docRef.delete();
+            } catch (e) {
+                console.log("문서 삭제 실패 (무시됨):", e.message);
+            }
 
         } catch (error) {
             console.error("processNotification 에러:", error);
-            await docRef.update({ processed: true, error: error.message });
+            // 에러 발생 시에도 문서 삭제 (재시도 루프 방지)
+            try {
+                await docRef.delete();
+            } catch (e) { /* 이미 삭제됨 */ }
         }
     }
 );

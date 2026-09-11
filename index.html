@@ -22,9 +22,11 @@
     <link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152x152.png">
     <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192x192.png">
 
-    <link rel="stylesheet" href="styles.css?v=61">
+    <link rel="stylesheet" href="styles.css?v=76">
     <!-- Animate.css -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"
+          integrity="sha384-Gu3KVV2H9d+yA4QDpVB7VcOyhJlAVrcXd0thEjr4KznfaFPLe0xQJyonVxONa4ZC"
+          crossorigin="anonymous" referrerpolicy="no-referrer">
     <!-- Three.js importmap -->
     <script type="importmap">
     {
@@ -40,15 +42,23 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js"></script>
-    <script src="firebase-config.js?v=57"></script>
+    <script src="firebase-config.js?v=76"></script>
     <!-- JSZip (사진 일괄 다운로드) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"
+            integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG"
+            crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <!-- QR Code 스캔 라이브러리 -->
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"
+            integrity="sha384-c9d8RFSL+u3exBOJ4Yp3HUJXS4znl9f+z66d1y54ig+ea249SpqR+w1wyvXz/lk+"
+            crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <!-- QR Code 생성 라이브러리 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"
+            integrity="sha384-3zSEDfvllQohrq0PHL1fOXJuC/jSOO34H46t6UQfobFOmxE5BpjjaIJY5F2/bMnU"
+            crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <!-- ExcelJS (QR 엑셀 내보내기) -->
-    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"
+            integrity="sha384-Pqp51FUN2/qzfxZxBCtF0stpc9ONI6MYZpVqmo8m20SoaQCzf+arZvACkLkirlPz"
+            crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body>
     <!-- Neural Network 전역 배경 -->
@@ -444,6 +454,7 @@
                         <option value="임대회수">임대회수</option>
                         <option value="상태변경">상태변경</option>
                         <option value="제품등록">제품등록</option>
+                        <option value="제품수정">제품수정</option>
                         <option value="제품삭제">제품삭제</option>
                     </select>
                 </div>
@@ -607,6 +618,55 @@
             <div class="modal-footer">
                 <button class="btn-secondary" id="editModalCancel">취소</button>
                 <button class="btn-primary" id="editModalSave">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 제품 정보 수정 모달 (제품관리 탭) -->
+    <div class="modal-overlay" id="editProductInfoModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>제품 정보 수정</h3>
+                <button class="modal-close" id="editInfoClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="editInfoId">제품 ID</label>
+                    <input type="text" id="editInfoId" readonly>
+                    <p class="form-help">제품 ID는 QR코드 값이라 변경할 수 없습니다.</p>
+                </div>
+                <div class="form-group">
+                    <label for="editInfoName">제품명 *</label>
+                    <input type="text" id="editInfoName" placeholder="제품명 입력" list="productNameSuggestions" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="editInfoCategory">카테고리</label>
+                    <input type="text" id="editInfoCategory" placeholder="예: 에어컨" list="productCategorySuggestions" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="editInfoTotalHours">사용가능시간 (시간) *</label>
+                    <input type="number" id="editInfoTotalHours" min="0" placeholder="예: 1000">
+                </div>
+                <div class="form-group">
+                    <label for="editInfoRemainingHours">잔여시간 (시간) *</label>
+                    <input type="number" id="editInfoRemainingHours" min="0" placeholder="예: 850">
+                </div>
+                <div class="form-group">
+                    <label for="editInfoSerial">시리얼넘버</label>
+                    <div class="edit-info-serial-row">
+                        <input type="text" id="editInfoSerial" placeholder="예: SN-ABCD1234">
+                        <button type="button" class="btn-secondary" id="editInfoRegenSerial">재발급</button>
+                    </div>
+                    <p class="form-help">QR 하단 라벨: <span id="editInfoLabelPreview">-</span></p>
+                </div>
+                <div class="form-group">
+                    <label for="editInfoNote">비고</label>
+                    <textarea id="editInfoNote" rows="3" placeholder="비고 입력"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="editInfoCancel">취소</button>
+                <button class="btn-primary" id="editInfoSave">저장</button>
             </div>
         </div>
     </div>
@@ -819,7 +879,7 @@
     </div>
 
     <!-- Neural Network 배경 -->
-    <script type="module" src="login-bg.js?v=61"></script>
+    <script type="module" src="login-bg.js?v=76"></script>
     <!-- 로그인 애니메이션 관리 -->
     <script>
         // 페이지 로드 후 안전하게 slideInUp 적용 (CDN 로딩 대기)
@@ -841,8 +901,8 @@
             }
         });
     </script>
-    <script src="notifications.js?v=57"></script>
-    <script src="app.js?v=57"></script>
+    <script src="notifications.js?v=76"></script>
+    <script src="app.js?v=76"></script>
     <script>
         // Service Worker 등록 (PWA 캐시 + FCM 통합)
         if ('serviceWorker' in navigator) {

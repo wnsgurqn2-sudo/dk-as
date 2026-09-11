@@ -740,6 +740,40 @@ body {
     color: var(--danger-color);
 }
 
+.btn-icon.edit-info-btn:hover {
+    background-color: #eff6ff;
+}
+
+/* 제품 정보 수정 모달 - 시리얼넘버 입력 + 재발급 버튼 */
+.edit-info-serial-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.edit-info-serial-row input {
+    flex: 1;
+    min-width: 0;
+}
+
+.edit-info-serial-row .btn-secondary {
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 10px 14px;
+}
+
+#editInfoId {
+    background-color: var(--gray-100);
+    color: var(--gray-500);
+    cursor: not-allowed;
+}
+
+#editInfoLabelPreview {
+    font-family: monospace;
+    font-weight: 700;
+    color: var(--gray-700);
+}
+
 .empty-state {
     text-align: center;
     padding: 40px 20px;
@@ -1410,7 +1444,9 @@ body {
     padding: 12px 24px;
     border-radius: var(--radius);
     font-size: 14px;
-    z-index: 1000;
+    /* 모달(1000/1500) · 사진모달(2000) · 인앱알림(10000)보다 위에 표시.
+       같은 z-index면 DOM 순서상 모달에 가려져 오류 메시지가 안 보였음 */
+    z-index: 10001;
     opacity: 0;
     transition: opacity 0.3s;
     pointer-events: none;
@@ -2242,6 +2278,22 @@ body {
         padding: 10px;
     }
 
+    /* 모바일 터치 타겟 확보: 32px는 너무 작고, 수정/삭제가 붙어 있어 오탭 위험 */
+    .product-actions {
+        gap: 10px;
+    }
+
+    .product-actions .btn-icon {
+        width: 44px;
+        height: 44px;
+        font-size: 18px;
+    }
+
+    /* 삭제는 실수로 누르기 쉬우므로 시각적으로 분리 */
+    .product-actions .btn-icon.danger {
+        background-color: #fef2f2;
+    }
+
     .action-buttons {
         flex-direction: column;
     }
@@ -2825,6 +2877,7 @@ body.large-view .rental-history-delete-btn {
 .history-type-badge.type-status { background: #f59e0b; }
 .history-type-badge.type-register { background: #8b5cf6; }
 .history-type-badge.type-delete { background: #ef4444; }
+.history-type-badge.type-edit { background: #0ea5e9; }
 
 /* ===== 크게보기 - 로그인/관리자 탭 ===== */
 body.large-view .login-header h1 {

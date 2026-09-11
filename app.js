@@ -5,8 +5,42 @@
 
 // ===== XSS 방지 =====
 function esc(str) {
-    if (!str) return '';
+    // null/undefined만 빈 문자열로 (숫자 0, false는 그대로 표시되어야 함)
+    if (str === null || str === undefined) return '';
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// 인라인 이벤트 핸들러의 작은따옴표 문자열 안에 넣을 값 이스케이프
+function escJs(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '\\x3C')
+        .replace(/\r?\n/g, '\\n');
+}
+
+// ===== 사진 리사이즈 (메모리 절약) =====
+function resizeImage(dataUrl, maxWidth = 1920, quality = 0.85) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            if (img.width <= maxWidth) {
+                resolve(dataUrl);
+                return;
+            }
+            const ratio = maxWidth / img.width;
+            const canvas = document.createElement('canvas');
+            canvas.width = maxWidth;
+            canvas.height = Math.round(img.height * ratio);
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = () => resolve(dataUrl);
+        img.src = dataUrl;
+    });
 }
 
 // ===== 상수 정의 =====
@@ -43,6 +77,44 @@ function generateSerialNumber() {
     return 'SN-' + sn;
 }
 
+// ===== QR 하단 라벨 (시리얼넘버 + 제품ID) =====
+function getQRSerialLabel(product) {
+    if (!product) return '';
+    const sn = product.serialNumber || '';
+    const pid = product.id || '';
+    if (sn && pid) return `${sn}-${pid}`;
+    return sn || pid;
+}
+
+// 텍스트가 maxWidth 를 꽉 채우도록 폰트 크기를 확대/축소해서 계산
+// fontBuilder(size) => CSS font 문자열
+function fitFontSizeToWidth(ctx, text, maxWidth, fontBuilder, minSize = 8, maxSize = 400) {
+    if (!text || maxWidth <= 0) return minSize;
+
+    // 기준 크기로 한 번 측정해서 비례식으로 근사값 계산
+    const baseSize = 100;
+    ctx.font = fontBuilder(baseSize);
+    const baseWidth = ctx.measureText(text).width || 1;
+    let size = Math.floor((baseSize * maxWidth) / baseWidth);
+    size = Math.min(Math.max(size, minSize), maxSize);
+
+    // 넘치면 줄이고
+    ctx.font = fontBuilder(size);
+    while (size > minSize && ctx.measureText(text).width > maxWidth) {
+        size--;
+        ctx.font = fontBuilder(size);
+    }
+    // 남으면 키운다
+    while (size < maxSize) {
+        ctx.font = fontBuilder(size + 1);
+        if (ctx.measureText(text).width > maxWidth) break;
+        size++;
+    }
+
+    ctx.font = fontBuilder(size);
+    return size;
+}
+
 // 상태별 진행률
 const STATUS_PROGRESS = {
     '미점검': 0,
@@ -66,7 +138,7 @@ function getProgressColorClass(progress) {
 
 // ===== 상태 관리 =====
 let products = [];
-let history = [];
+let appHistory = [];
 let currentFilter = 'all';
 let searchKeyword = '';
 let html5QrCode = null;
@@ -120,6 +192,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initQRGenerator();
     initModal();
     initEditProductModal();
+    initProductInfoModal();
     initRentalHistoryModal();
     initRepairHistoryModal();
     initPhotoCapture();
@@ -132,6 +205,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ===== 인증 관리 =====
+let pendingApprovalUnsubscribe = null;
+
 function initAuth() {
     authInstance.onAuthStateChanged(async (user) => {
         if (user) {
@@ -161,6 +236,21 @@ function initAuth() {
                     // 미승인 사용자 차단
                     if (!currentUserProfile.approved) {
                         showPendingApproval();
+                        // 승인 상태 실시간 감지 → 승인되면 자동 새로고침
+                        if (pendingApprovalUnsubscribe) {
+                            pendingApprovalUnsubscribe();
+                            pendingApprovalUnsubscribe = null;
+                        }
+                        pendingApprovalUnsubscribe = db.collection('users').doc(user.uid)
+                            .onSnapshot((doc) => {
+                                if (doc.exists && doc.data().approved) {
+                                    if (pendingApprovalUnsubscribe) {
+                                        pendingApprovalUnsubscribe();
+                                        pendingApprovalUnsubscribe = null;
+                                    }
+                                    location.reload();
+                                }
+                            });
                         return;
                     }
 
@@ -204,13 +294,18 @@ function initAuth() {
                 showToast('사용자 정보를 불러오는 중 오류가 발생했습니다.', 'error');
             }
         } else {
+            // 미승인 리스너 정리
+            if (pendingApprovalUnsubscribe) {
+                pendingApprovalUnsubscribe();
+                pendingApprovalUnsubscribe = null;
+            }
             currentUser = null;
             currentUserProfile = null;
             isAdmin = false;
             isSuperAdmin = false;
             userRole = ROLE.USER;
             products = [];
-            history = [];
+            appHistory = [];
 
             // 관리자/총책임자 전용 UI 숨기기
             document.getElementById('adminHistoryTab').style.display = 'none';
@@ -312,7 +407,7 @@ async function completeProfile() {
 function logoutUser() {
     authInstance.signOut();
     products = [];
-    history = [];
+    appHistory = [];
 }
 
 function showLoginScreen() {
@@ -649,8 +744,9 @@ function handleMultiPhotoCapture(event, type) {
 
     filesToProcess.forEach(file => {
         const reader = new FileReader();
-        reader.onload = (e) => {
-            photos.push(e.target.result);
+        reader.onload = async (e) => {
+            const resized = await resizeImage(e.target.result);
+            photos.push(resized);
             processedCount++;
 
             // 모든 파일 처리 완료 시 UI 업데이트
@@ -682,8 +778,8 @@ function updatePhotoList(type) {
 
     listDiv.innerHTML = photos.map((photo, index) => `
         <div class="photo-item">
-            <img src="${photo}" alt="사진 ${index + 1}">
-            <button type="button" class="photo-delete-btn" onclick="deletePhoto('${type}', ${index})">×</button>
+            <img src="${esc(photo)}" alt="사진 ${index + 1}">
+            <button type="button" class="photo-delete-btn" onclick="deletePhoto('${escJs(type)}', ${index})">×</button>
         </div>
     `).join('');
 }
@@ -768,8 +864,9 @@ function handleEditPhotoCapture(event, type) {
 
     filesToProcess.forEach(file => {
         const reader = new FileReader();
-        reader.onload = (e) => {
-            photos.push(e.target.result);
+        reader.onload = async (e) => {
+            const resized = await resizeImage(e.target.result);
+            photos.push(resized);
             processedCount++;
             if (processedCount === filesToProcess.length) {
                 updateEditPhotoList(type);
@@ -798,8 +895,8 @@ function updateEditPhotoList(type) {
 
     listDiv.innerHTML = photos.map((photo, index) => `
         <div class="photo-item">
-            <img src="${photo}" alt="사진 ${index + 1}">
-            <button type="button" class="photo-delete-btn" onclick="deleteEditPhoto('${type}', ${index})">×</button>
+            <img src="${esc(photo)}" alt="사진 ${index + 1}">
+            <button type="button" class="photo-delete-btn" onclick="deleteEditPhoto('${escJs(type)}', ${index})">×</button>
         </div>
     `).join('');
 }
@@ -850,9 +947,9 @@ async function loadData() {
             .orderBy('time', 'desc')
             .limit(100)
             .get();
-        history = [];
+        appHistory = [];
         historySnapshot.forEach(doc => {
-            history.push(doc.data());
+            appHistory.push(doc.data());
         });
     } catch (e) {
         console.error('데이터 로드 오류:', e);
@@ -860,29 +957,34 @@ async function loadData() {
     }
 }
 
-async function saveProduct(product) {
-    try {
-        await db.collection('products').doc(product.id).set(product);
-    } catch (e) {
-        console.error('제품 저장 오류:', e);
+// Firestore 배치는 작업 500개가 한계 → 청크로 나눠 커밋
+const FIRESTORE_BATCH_LIMIT = 450; // 여유를 둔 값
+
+async function commitInChunks(items, applyOp) {
+    for (let i = 0; i < items.length; i += FIRESTORE_BATCH_LIMIT) {
+        const chunk = items.slice(i, i + FIRESTORE_BATCH_LIMIT);
+        const batch = db.batch();
+        chunk.forEach(item => applyOp(batch, item));
+        await batch.commit();
     }
 }
 
-function saveData() {
-    // 모든 제품을 Firestore에 일괄 저장 (비동기)
-    const batch = db.batch();
-    products.forEach(product => {
-        batch.set(db.collection('products').doc(product.id), product);
-    });
-    batch.commit().catch(e => {
+async function saveData() {
+    // 모든 제품을 Firestore에 일괄 저장 (500개 초과 시 자동 분할)
+    try {
+        await commitInChunks(products, (batch, product) => {
+            batch.set(db.collection('products').doc(product.id), product, { merge: true });
+        });
+    } catch (e) {
         console.error('데이터 저장 오류:', e);
         showToast('저장 중 오류가 발생했습니다.', 'error');
-    });
+        throw e;
+    }
 }
 
-// 단일 제품만 Firestore에 저장 (빠른 저장)
+// 단일 제품 Firestore 저장 (merge: true로 동시 조작 시 필드 보존)
 function saveProduct(product) {
-    return db.collection('products').doc(product.id).set(product).catch(e => {
+    return db.collection('products').doc(product.id).set(product, { merge: true }).catch(e => {
         console.error('제품 저장 오류:', e);
         showToast('저장 중 오류가 발생했습니다.', 'error');
     });
@@ -897,14 +999,10 @@ async function deleteProductFromFirestore(productId) {
 }
 
 async function deleteAllProductsFromFirestore() {
-    try {
-        const snapshot = await db.collection('products').get();
-        const batch = db.batch();
-        snapshot.forEach(doc => batch.delete(doc.ref));
-        await batch.commit();
-    } catch (e) {
-        console.error('전체 삭제 오류:', e);
-    }
+    // 실패를 호출부로 전달 (예전에는 삼켜서 실제로 안 지워져도 성공처럼 보였음)
+    const snapshot = await db.collection('products').get();
+    const refs = snapshot.docs.map(doc => doc.ref);
+    await commitInChunks(refs, (batch, ref) => batch.delete(ref));
 }
 
 // ===== Firebase Storage 사진 업로드 (진행률 표시) =====
@@ -1349,7 +1447,7 @@ function initScanActions() {
 
         document.getElementById('usedTimeInfo').innerHTML =
             `<strong>회수 전:</strong> ${previousRemaining}시간 → <strong>회수 후:</strong> ${newRemaining}시간<br>` +
-            `<strong style="color: #dc2626;">실사용시간: ${usedHours}시간</strong> (${currentScannedProduct.rentalCompany})`;
+            `<strong style="color: #dc2626;">실사용시간: ${usedHours}시간</strong> (${esc(currentScannedProduct.rentalCompany)})`;
     });
 
     // 임대회수 상태 버튼 클릭 (선택만)
@@ -1379,12 +1477,30 @@ function initScanActions() {
             return;
         }
 
+        // 잔여시간 검증 (try 외부 - 검증 실패 시 폼 유지)
+        const newRemaining = parseInt(document.getElementById('returnHours').value);
+        if (isNaN(newRemaining) || newRemaining < 0) {
+            showToast('잔여시간은 0 이상의 숫자를 입력해주세요.', 'error');
+            return;
+        }
+        const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
+        if (productIndex === -1) {
+            showToast('제품을 찾을 수 없습니다.', 'error');
+            hideScanActionPanel();
+            return;
+        }
+        const previousRemaining = products[productIndex].remainingHours || products[productIndex].totalHours;
+        if (newRemaining > previousRemaining) {
+            if (!confirm(`입력한 잔여시간(${newRemaining}h)이 회수 전 잔여시간(${previousRemaining}h)보다 큽니다.\n계속하시겠습니까?`)) {
+                return;
+            }
+        }
+
         const saveBtn = document.getElementById('btnReturnSave');
         try {
             saveBtn.disabled = true;
             saveBtn.textContent = '저장 중...';
 
-            const newRemaining = parseInt(document.getElementById('returnHours').value) || 0;
             const note = document.getElementById('returnNote').value.trim();
 
             // 사진 업로드 (진행률 표시)
@@ -1395,58 +1511,53 @@ function initScanActions() {
                 });
             }
 
-            // 제품 업데이트
-            const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
-            if (productIndex !== -1) {
-                const previousRemaining = products[productIndex].remainingHours || products[productIndex].totalHours;
-                const usedHours = Math.abs(previousRemaining - newRemaining);
+            const usedHours = Math.abs(previousRemaining - newRemaining);
 
-                // 현재 임대 기록 업데이트
-                if (products[productIndex].rentalHistory && products[productIndex].currentRentalIndex !== undefined) {
-                    const currentRental = products[productIndex].rentalHistory[products[productIndex].currentRentalIndex];
-                    if (currentRental) {
-                        currentRental.returnDate = new Date().toISOString();
-                        currentRental.usedHours = usedHours;
-                        currentRental.remainingHoursAtReturn = newRemaining;
-                        currentRental.note = note;
-                        currentRental.returnPhotos = returnPhotoUrls;
-                    }
+            // 현재 임대 기록 업데이트
+            if (products[productIndex].rentalHistory && products[productIndex].currentRentalIndex !== undefined) {
+                const currentRental = products[productIndex].rentalHistory[products[productIndex].currentRentalIndex];
+                if (currentRental) {
+                    currentRental.returnDate = new Date().toISOString();
+                    currentRental.usedHours = usedHours;
+                    currentRental.remainingHoursAtReturn = newRemaining;
+                    currentRental.note = note;
+                    currentRental.returnPhotos = returnPhotoUrls;
                 }
-
-                const returnRecord = {
-                    type: '임대회수',
-                    productId: currentScannedProduct.id,
-                    productName: currentScannedProduct.name,
-                    company: products[productIndex].rentalCompany,
-                    usedHours: usedHours,
-                    previousRemaining: previousRemaining,
-                    newRemaining: newRemaining,
-                    note: note,
-                    status: selectedReturnStatus,
-                    time: new Date().toISOString()
-                };
-
-                products[productIndex].remainingHours = newRemaining;
-                products[productIndex].isRented = false;
-                products[productIndex].status = selectedReturnStatus;
-                products[productIndex].lastUpdated = new Date().toISOString();
-                products[productIndex].lastNote = note;
-                products[productIndex].lastCompany = products[productIndex].rentalCompany;
-                products[productIndex].lastUsedHours = usedHours;
-                products[productIndex].rentalCompany = null;
-                products[productIndex].rentalDate = null;
-                products[productIndex].currentRentalIndex = null;
-
-                saveProduct(products[productIndex]);
-                addHistory(returnRecord);
-
-                if (typeof createNotification === 'function') {
-                    createNotification('return', currentScannedProduct.name, { status: selectedReturnStatus });
-                }
-
-                showToast(`${currentScannedProduct.name} 회수 완료 - 실사용: ${usedHours}h, ${selectedReturnStatus}`, 'success');
-                updateDashboard();
             }
+
+            const returnRecord = {
+                type: '임대회수',
+                productId: currentScannedProduct.id,
+                productName: currentScannedProduct.name,
+                company: products[productIndex].rentalCompany,
+                usedHours: usedHours,
+                previousRemaining: previousRemaining,
+                newRemaining: newRemaining,
+                note: note,
+                status: selectedReturnStatus,
+                time: new Date().toISOString()
+            };
+
+            products[productIndex].remainingHours = newRemaining;
+            products[productIndex].isRented = false;
+            products[productIndex].status = selectedReturnStatus;
+            products[productIndex].lastUpdated = new Date().toISOString();
+            products[productIndex].lastNote = note;
+            products[productIndex].lastCompany = products[productIndex].rentalCompany;
+            products[productIndex].lastUsedHours = usedHours;
+            products[productIndex].rentalCompany = null;
+            products[productIndex].rentalDate = null;
+            products[productIndex].currentRentalIndex = null;
+
+            saveProduct(products[productIndex]);
+            addHistory(returnRecord);
+
+            if (typeof createNotification === 'function') {
+                createNotification('return', currentScannedProduct.name, { status: selectedReturnStatus });
+            }
+
+            showToast(`${currentScannedProduct.name} 회수 완료 - 실사용: ${usedHours}h, ${selectedReturnStatus}`, 'success');
+            updateDashboard();
         } catch (e) {
             console.error('회수 저장 오류:', e);
             showToast('저장 중 오류가 발생했습니다.', 'error');
@@ -1499,16 +1610,21 @@ function initScanActions() {
             return;
         }
 
-        try {
-            const note = document.getElementById('statusNote').value.trim();
-            const repairItems = document.getElementById('repairItems').value.trim();
-            const outsourceRequested = document.getElementById('outsourceCheck').checked;
+        // 수리중/수리완료 선택 시 수리항목 필수 (try 외부 - 검증 실패 시 폼 유지)
+        const repairItems = document.getElementById('repairItems').value.trim();
+        if ((selectedChangeStatus === '수리중' || selectedChangeStatus === '수리완료') && !repairItems) {
+            showToast('수리항목을 입력해주세요.', 'error');
+            return;
+        }
 
-            // 수리중/수리완료 선택 시 수리항목 필수
-            if ((selectedChangeStatus === '수리중' || selectedChangeStatus === '수리완료') && !repairItems) {
-                showToast('수리항목을 입력해주세요.', 'error');
-                return;
-            }
+        const saveBtn = document.getElementById('btnStatusSave');
+        if (saveBtn.disabled) return;
+
+        try {
+            saveBtn.disabled = true;
+            saveBtn.textContent = '저장 중...';
+            const note = document.getElementById('statusNote').value.trim();
+            const outsourceRequested = document.getElementById('outsourceCheck').checked;
 
             const productIndex = products.findIndex(p => p.id === currentScannedProduct.id);
             if (productIndex !== -1) {
@@ -1587,6 +1703,8 @@ function initScanActions() {
             console.error('상태변경 저장 오류:', e);
             showToast('저장 중 오류가 발생했습니다.', 'error');
         } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = '저장';
             selectedChangeStatus = null;
             document.getElementById('repairItems').value = '';
             document.getElementById('repairItemsGroup').style.display = 'none';
@@ -1599,17 +1717,21 @@ function initScanActions() {
 
 // ===== 기록 관리 =====
 function addHistory(record) {
-    // 사용자 정보 추가
-    if (currentUser && currentUserProfile) {
-        record.userId = currentUser.uid;
-        record.userName = currentUserProfile.name;
-        record.userDepartment = currentUserProfile.department;
-        record.userEmail = currentUser.email;
+    // 로그인 상태가 아니면 기록하지 않음 (보안 규칙상 userId 없는 기록은 거부됨)
+    if (!currentUser) {
+        console.warn('로그인 상태가 아니어서 히스토리를 기록하지 않습니다.');
+        return;
     }
 
-    history.unshift(record);
-    if (history.length > 100) {
-        history = history.slice(0, 100);
+    // 사용자 정보 추가 (userId는 항상 필수)
+    record.userId = currentUser.uid;
+    record.userEmail = currentUser.email;
+    record.userName = currentUserProfile?.name || currentUser.email;
+    record.userDepartment = currentUserProfile?.department || '';
+
+    appHistory.unshift(record);
+    if (appHistory.length > 100) {
+        appHistory = appHistory.slice(0, 100);
     }
 
     // Firestore에 히스토리 저장
@@ -1623,12 +1745,12 @@ function addHistory(record) {
 function updateHistoryList() {
     const listDiv = document.getElementById('scanHistoryList');
 
-    if (history.length === 0) {
+    if (appHistory.length === 0) {
         listDiv.innerHTML = '<div class="empty-state">기록이 없습니다.</div>';
         return;
     }
 
-    listDiv.innerHTML = history.slice(0, 20).map(item => {
+    listDiv.innerHTML = appHistory.slice(0, 20).map(item => {
         const time = new Date(item.time);
         const timeStr = time.toLocaleString('ko-KR', {
             month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
@@ -1640,11 +1762,14 @@ function updateHistoryList() {
             detail = `→ ${esc(item.company)}`;
             itemClass = 'rental';
         } else if (item.type === '임대회수') {
-            detail = `← ${esc(item.company)} | ${item.previousRemaining}h→${item.newRemaining}h (실사용:${item.usedHours}h) | ${esc(item.status)}`;
+            detail = `← ${esc(item.company)} | ${esc(item.previousRemaining)}h→${esc(item.newRemaining)}h (실사용:${esc(item.usedHours)}h) | ${esc(item.status)}`;
             itemClass = 'return';
         } else if (item.type === '상태변경') {
             detail = `${esc(item.previousStatus)} → ${esc(item.newStatus)}`;
             itemClass = 'status-change';
+        } else if (item.type === '제품수정') {
+            detail = esc(item.changes || '');
+            itemClass = 'product-edit';
         }
 
         return `
@@ -1686,7 +1811,7 @@ function updateAutoCompleteSuggestions() {
     const nameDatalist = document.getElementById('productNameSuggestions');
     if (nameDatalist) {
         nameDatalist.innerHTML = Array.from(nameSet).map(name =>
-            `<option value="${name}">`
+            `<option value="${(name || '').replace(/"/g, '&quot;')}">`
         ).join('');
     }
 
@@ -1695,7 +1820,7 @@ function updateAutoCompleteSuggestions() {
     const catDatalist = document.getElementById('productCategorySuggestions');
     if (catDatalist) {
         catDatalist.innerHTML = Array.from(catSet).map(cat =>
-            `<option value="${cat}">`
+            `<option value="${(cat || '').replace(/"/g, '&quot;')}">`
         ).join('');
     }
 }
@@ -1766,7 +1891,7 @@ function initProductForm() {
 function initBulkRegister() {
     const bulkBtn = document.getElementById('bulkRegisterBtn');
 
-    bulkBtn.addEventListener('click', () => {
+    bulkBtn.addEventListener('click', async () => {
         const input = document.getElementById('bulkInput').value.trim();
 
         if (!input) {
@@ -1775,6 +1900,7 @@ function initBulkRegister() {
         }
 
         const lines = input.split('\n').filter(line => line.trim());
+        const backup = products.slice(); // 저장 실패 시 되돌리기용
         let addedCount = 0;
         let skippedCount = 0;
 
@@ -1815,15 +1941,37 @@ function initBulkRegister() {
             addedCount++;
         });
 
-        saveData();
+        if (addedCount === 0) {
+            showToast(`등록된 제품이 없습니다. (${skippedCount}개 건너뜀)`, 'error');
+            return;
+        }
+
+        bulkBtn.disabled = true;
+        bulkBtn.textContent = '등록 중...';
+
+        try {
+            await saveData();
+        } catch (e) {
+            // 저장 실패 시 방금 추가한 제품을 로컬에서도 되돌림
+            products = backup;
+            updateDashboard();
+            updateProductList();
+            showToast('일괄 등록 실패: ' + e.message, 'error');
+            return;
+        } finally {
+            bulkBtn.disabled = false;
+            bulkBtn.textContent = '일괄 등록';
+        }
+
         document.getElementById('bulkInput').value = '';
 
         updateDashboard();
         updateProductList();
         updateQRProductSelect();
         updateQRSheetProductList();
+        updateAutoCompleteSuggestions();
 
-        if (addedCount > 0 && typeof createNotification === 'function') {
+        if (typeof createNotification === 'function') {
             createNotification('product_registered', `${addedCount}개 제품 일괄등록`, {});
         }
 
@@ -1843,10 +1991,23 @@ function initDeleteAll() {
         showModal(
             '전체 삭제',
             `등록된 ${products.length}개의 제품을 모두 삭제하시겠습니까?<br>이 작업은 되돌릴 수 없습니다.`,
-            () => {
+            async () => {
                 const count = products.length;
+                const backup = products.slice();
+
+                try {
+                    await deleteAllProductsFromFirestore();
+                } catch (e) {
+                    // 삭제 실패 시 로컬 목록을 되돌려 화면과 서버 상태를 일치시킴
+                    console.error('전체 삭제 오류:', e);
+                    products = backup;
+                    updateDashboard();
+                    updateProductList();
+                    showToast('전체 삭제 실패: ' + e.message, 'error');
+                    return;
+                }
+
                 products = [];
-                deleteAllProductsFromFirestore();
 
                 addHistory({
                     type: '제품삭제',
@@ -2114,7 +2275,7 @@ function updateProductList() {
             infoHtml = `
                 <div class="rental-info-box">
                     <span class="rental-label">임대중</span>
-                    <span class="rental-detail">${product.rentalCompany} | ${rentalDate}</span>
+                    <span class="rental-detail">${esc(product.rentalCompany)} | ${esc(rentalDate)}</span>
                 </div>
             `;
         } else if (product.status === '예약' && product.reservedBy) {
@@ -2123,7 +2284,7 @@ function updateProductList() {
             infoHtml = `
                 <div class="reserved-info-box">
                     <span class="reserved-label">예약</span>
-                    <span class="reserved-detail">${product.reservedBy} | ${reservedDate}</span>
+                    <span class="reserved-detail">${esc(product.reservedBy)} | ${esc(reservedDate)}</span>
                 </div>
             `;
         } else {
@@ -2134,7 +2295,7 @@ function updateProductList() {
                 infoHtml = `
                     <div class="return-info-box">
                         <span class="return-label">최근회수</span>
-                        <span class="return-detail">${lastRentalRecord.company} | ${returnDate}</span>
+                        <span class="return-detail">${esc(lastRentalRecord.company)} | ${esc(returnDate)}</span>
                     </div>
                 `;
             }
@@ -2147,14 +2308,14 @@ function updateProductList() {
         } else if (product.status === '예약') {
             statusBadge = `<span class="reserved-badge">예약</span>`;
         } else {
-            statusBadge = `<span class="product-status ${product.status}">${product.status}</span>`;
+            statusBadge = `<span class="product-status ${esc(product.status)}">${esc(product.status)}</span>`;
         }
 
         const outsourceBadge = (product.status === '수리중' && product.outsourceRequested) ? '<span class="outsource-badge">외주요청</span>' : '';
 
         return `
-            <div class="product-item product-manage-item" data-id="${product.id}">
-                <span class="product-status-badge ${product.isRented ? '임대중' : product.status}"></span>
+            <div class="product-item product-manage-item" data-id="${esc(product.id)}">
+                <span class="product-status-badge ${product.isRented ? '임대중' : esc(product.status)}"></span>
                 <div class="product-info">
                     <div class="product-name">${esc(product.name)}${outsourceBadge}</div>
                     <div class="product-id">${esc(product.id)} | ${esc(product.category)} | 잔여: ${product.remainingHours || product.totalHours}h</div>
@@ -2162,21 +2323,30 @@ function updateProductList() {
                 </div>
                 ${statusBadge}
                 <div class="product-actions">
+                    <button class="btn-icon edit-info-btn" data-id="${esc(product.id)}" title="정보 수정">✏️</button>
                     <button class="btn-icon danger delete-btn" data-id="${esc(product.id)}" title="삭제">🗑️</button>
                 </div>
             </div>
         `;
     }).join('');
 
-    // 제품 항목 클릭 이벤트 (삭제 버튼 제외)
+    // 제품 항목 클릭 이벤트 (수정/삭제 버튼 제외)
     listDiv.querySelectorAll('.product-manage-item').forEach(item => {
         item.addEventListener('click', (e) => {
-            // 삭제 버튼 클릭 시 모달 열지 않음
-            if (e.target.closest('.delete-btn')) {
+            // 액션 버튼 클릭 시 모달 열지 않음
+            if (e.target.closest('.delete-btn') || e.target.closest('.edit-info-btn')) {
                 return;
             }
             const productId = item.dataset.id;
             openEditProductModal(productId);
+        });
+    });
+
+    // 정보 수정 버튼 이벤트
+    listDiv.querySelectorAll('.edit-info-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openProductInfoModal(btn.dataset.id);
         });
     });
 
@@ -2187,6 +2357,155 @@ function updateProductList() {
             deleteProduct(btn.dataset.id);
         });
     });
+}
+
+// ===== 제품 정보 수정 (제품관리 탭) =====
+let currentInfoEditProduct = null;
+
+function initProductInfoModal() {
+    const modal = document.getElementById('editProductInfoModal');
+    if (!modal) return;
+
+    const close = () => {
+        modal.classList.remove('show');
+        currentInfoEditProduct = null;
+    };
+
+    document.getElementById('editInfoClose').addEventListener('click', close);
+    document.getElementById('editInfoCancel').addEventListener('click', close);
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+
+    // 시리얼넘버 재발급
+    document.getElementById('editInfoRegenSerial').addEventListener('click', () => {
+        document.getElementById('editInfoSerial').value = generateSerialNumber();
+        updateInfoLabelPreview();
+    });
+
+    // 시리얼넘버 입력 시 라벨 미리보기 갱신
+    document.getElementById('editInfoSerial').addEventListener('input', updateInfoLabelPreview);
+
+    document.getElementById('editInfoSave').addEventListener('click', saveProductInfo);
+}
+
+function updateInfoLabelPreview() {
+    const preview = document.getElementById('editInfoLabelPreview');
+    if (!preview || !currentInfoEditProduct) return;
+    const sn = document.getElementById('editInfoSerial').value.trim().toUpperCase();
+    preview.textContent = getQRSerialLabel({ ...currentInfoEditProduct, serialNumber: sn }) || '-';
+}
+
+function openProductInfoModal(productId) {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+
+    currentInfoEditProduct = product;
+
+    document.getElementById('editInfoId').value = product.id;
+    document.getElementById('editInfoName').value = product.name || '';
+    document.getElementById('editInfoCategory').value = product.category || '';
+    document.getElementById('editInfoTotalHours').value = product.totalHours ?? 0;
+    document.getElementById('editInfoRemainingHours').value =
+        product.remainingHours ?? product.totalHours ?? 0;
+    document.getElementById('editInfoSerial').value = product.serialNumber || '';
+    document.getElementById('editInfoNote').value = product.note || '';
+
+    updateInfoLabelPreview();
+    document.getElementById('editProductInfoModal').classList.add('show');
+}
+
+async function saveProductInfo() {
+    if (!currentInfoEditProduct) return;
+
+    const product = currentInfoEditProduct;
+
+    const name = document.getElementById('editInfoName').value.trim();
+    const category = document.getElementById('editInfoCategory').value.trim() || '기타';
+    const totalHoursRaw = document.getElementById('editInfoTotalHours').value;
+    const remainingHoursRaw = document.getElementById('editInfoRemainingHours').value;
+    const serialNumber = document.getElementById('editInfoSerial').value.trim().toUpperCase();
+    const note = document.getElementById('editInfoNote').value.trim();
+
+    // 검증
+    if (!name) {
+        showToast('제품명을 입력해주세요.', 'error');
+        return;
+    }
+    if (totalHoursRaw === '' || remainingHoursRaw === '') {
+        showToast('사용가능시간과 잔여시간을 입력해주세요.', 'error');
+        return;
+    }
+
+    const totalHours = parseInt(totalHoursRaw, 10);
+    const remainingHours = parseInt(remainingHoursRaw, 10);
+
+    if (isNaN(totalHours) || totalHours < 0 || isNaN(remainingHours) || remainingHours < 0) {
+        showToast('시간은 0 이상의 숫자로 입력해주세요.', 'error');
+        return;
+    }
+    if (remainingHours > totalHours) {
+        showToast('잔여시간은 사용가능시간보다 클 수 없습니다.', 'error');
+        return;
+    }
+    if (serialNumber && products.some(p => p.id !== product.id && p.serialNumber === serialNumber)) {
+        showToast('이미 사용 중인 시리얼넘버입니다.', 'error');
+        return;
+    }
+
+    // 변경 내역 수집 (히스토리용)
+    const changes = [];
+    if ((product.name || '') !== name) changes.push(`제품명: ${product.name || '-'} → ${name}`);
+    if ((product.category || '') !== category) changes.push(`카테고리: ${product.category || '-'} → ${category}`);
+    if ((product.totalHours ?? 0) !== totalHours) changes.push(`사용가능시간: ${product.totalHours ?? 0}h → ${totalHours}h`);
+    if ((product.remainingHours ?? product.totalHours ?? 0) !== remainingHours) {
+        changes.push(`잔여시간: ${product.remainingHours ?? product.totalHours ?? 0}h → ${remainingHours}h`);
+    }
+    if ((product.serialNumber || '') !== serialNumber) changes.push(`시리얼넘버: ${product.serialNumber || '-'} → ${serialNumber || '-'}`);
+    if ((product.note || '') !== note) changes.push('비고 변경');
+
+    if (changes.length === 0) {
+        showToast('변경사항이 없습니다.', 'error');
+        return;
+    }
+
+    const saveBtn = document.getElementById('editInfoSave');
+    saveBtn.disabled = true;
+    saveBtn.textContent = '저장 중...';
+
+    try {
+        // 로컬 데이터 갱신 (기존 필드는 그대로 유지)
+        product.name = name;
+        product.category = category;
+        product.totalHours = totalHours;
+        product.remainingHours = remainingHours;
+        product.serialNumber = serialNumber || product.serialNumber || generateSerialNumber();
+        product.note = note;
+        product.lastUpdated = new Date().toISOString();
+
+        await saveProduct(product);
+
+        addHistory({
+            type: '제품수정',
+            productId: product.id,
+            productName: product.name,
+            changes: changes.join(' | '),
+            time: new Date().toISOString()
+        });
+
+        document.getElementById('editProductInfoModal').classList.remove('show');
+        currentInfoEditProduct = null;
+
+        updateDashboard();
+        updateProductList();
+        updateAutoCompleteSuggestions();
+
+        showToast('제품 정보가 수정되었습니다.', 'success');
+    } catch (e) {
+        console.error('제품 정보 수정 오류:', e);
+        showToast('수정 실패: ' + e.message, 'error');
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '저장';
+    }
 }
 
 function deleteProduct(productId) {
@@ -2370,7 +2689,7 @@ function updateDashboardList() {
             infoHtml = `
                 <div class="rental-info-box">
                     <span class="rental-label">임대중</span>
-                    <span class="rental-detail">${product.rentalCompany} | ${rentalDate}</span>
+                    <span class="rental-detail">${esc(product.rentalCompany)} | ${esc(rentalDate)}</span>
                 </div>
             `;
             statusHtml = `<span class="rental-badge">임대중</span>`;
@@ -2380,7 +2699,7 @@ function updateDashboardList() {
             infoHtml = `
                 <div class="reserved-info-box">
                     <span class="reserved-label">예약</span>
-                    <span class="reserved-detail">${product.reservedBy} | ${reservedDate}</span>
+                    <span class="reserved-detail">${esc(product.reservedBy)} | ${esc(reservedDate)}</span>
                 </div>
             `;
             statusHtml = `<span class="reserved-badge">예약</span>`;
@@ -2394,11 +2713,11 @@ function updateDashboardList() {
                 infoHtml = `
                     <div class="return-info-box">
                         <span class="return-label">최근회수</span>
-                        <span class="return-detail">${lastRentalRecord.company} | ${returnDate}</span>
+                        <span class="return-detail">${esc(lastRentalRecord.company)} | ${esc(returnDate)}</span>
                     </div>
                 `;
             }
-            statusHtml = `<span class="product-status ${product.status}">${product.status}</span>`;
+            statusHtml = `<span class="product-status ${esc(product.status)}">${esc(product.status)}</span>`;
         }
 
         const outsourceBadge = (product.status === '수리중' && product.outsourceRequested) ? '<span class="outsource-badge">외주요청</span>' : '';
@@ -2418,8 +2737,8 @@ function updateDashboardList() {
                </div>`;
 
         return `
-            <div class="product-item dashboard-item" data-id="${product.id}">
-                <span class="product-status-badge ${product.isRented ? '임대중' : product.status}"></span>
+            <div class="product-item dashboard-item" data-id="${esc(product.id)}">
+                <span class="product-status-badge ${product.isRented ? '임대중' : esc(product.status)}"></span>
                 <div class="product-info">
                     <div class="product-name">${esc(product.name)}${outsourceBadge}</div>
                     <div class="product-id">${esc(product.id)} | 잔여: ${product.remainingHours || product.totalHours}h</div>
@@ -2509,7 +2828,7 @@ function getFilteredQRProducts(keyword) {
     if (!keyword) return products;
     return products.filter(p =>
         (p.name || '').toLowerCase().includes(keyword) ||
-        (p.productId || '').toLowerCase().includes(keyword) ||
+        (p.id || '').toLowerCase().includes(keyword) ||
         (p.category || '').toLowerCase().includes(keyword) ||
         (p.serialNumber || '').toLowerCase().includes(keyword)
     );
@@ -2537,7 +2856,7 @@ function renderQRPrintList() {
             <input type="checkbox" class="qr-print-checkbox" data-id="${esc(p.id)}" ${checked}>
             <div class="qr-print-item-info">
                 <span class="qr-print-item-name">${esc(p.name)}</span>
-                <span class="qr-print-item-detail">${esc(p.productId)} | ${esc(p.category)} | SN: ${esc(p.serialNumber)}</span>
+                <span class="qr-print-item-detail">${esc(p.id)} | ${esc(p.category)} | SN: ${esc(p.serialNumber)}</span>
             </div>
         </label>`;
     }).join('');
@@ -2637,7 +2956,7 @@ async function exportQRExcel() {
             const qrRowNum = currentRow;
             const snRowNum = currentRow + 1;
             const qrData = product.id; // QR 데이터: Firestore 문서 ID (스캔 시 이 값으로 검색)
-            const snLabel = product.serialNumber || product.productId || product.id; // 표시용 시리얼넘버
+            const snLabel = getQRSerialLabel(product); // 표시용: 시리얼넘버 + 제품ID
 
             // QR 행 (이미지용 - 높이 크게)
             const qrRow = sheet.getRow(qrRowNum);
@@ -2654,9 +2973,14 @@ async function exportQRExcel() {
                 left: { style: 'thin' }, right: { style: 'thin' }
             };
 
-            // 시리얼넘버 행 (텍스트용 - 높이 작게)
+            // 시리얼넘버 폰트를 라벨 열 폭에 맞춰 확대 (엑셀 열너비 1 ≒ 11pt 기준 1글자)
+            const snFontPt = Math.max(6, Math.min(18,
+                Math.floor((colWidthExcel * 11) / Math.max(snLabel.length, 1))
+            ));
+
+            // 시리얼넘버 행 (텍스트용 - 폰트 크기에 맞춰 높이 확보)
             const snRow = sheet.getRow(snRowNum);
-            snRow.height = 20;
+            snRow.height = Math.max(20, Math.round(snFontPt * 1.6));
 
             // QR 이미지 생성 → 셀 크기 캔버스에 가운데 합성
             let centeredQRBase64 = null;
@@ -2686,7 +3010,7 @@ async function exportQRExcel() {
                 }
                 tempDiv.removeChild(qrContainer);
             } catch (qrErr) {
-                console.warn('QR 생성 실패:', sn, qrErr);
+                console.warn('QR 생성 실패:', snLabel, qrErr);
             }
 
             // 매수만큼 가로로 QR 이미지 + 시리얼넘버 배치
@@ -2712,7 +3036,7 @@ async function exportQRExcel() {
                 // 시리얼넘버 텍스트 셀
                 const snCell = snRow.getCell(c + 2);
                 snCell.value = snLabel;
-                snCell.font = { size: 9, color: { argb: 'FF333333' } };
+                snCell.font = { size: snFontPt, bold: true, color: { argb: 'FF000000' } };
                 snCell.alignment = { horizontal: 'center', vertical: 'middle' };
                 snCell.border = {
                     bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }
@@ -2821,7 +3145,7 @@ async function downloadQRJpg() {
     try {
         for (const product of selectedProducts) {
             const qrData = product.id;
-            const snLabel = product.serialNumber || product.productId || product.id;
+            const snLabel = getQRSerialLabel(product); // 시리얼넘버 + 제품ID
             const productName = product.name || '제품';
 
             // QR 코드 생성
@@ -2848,20 +3172,21 @@ async function downloadQRJpg() {
             const tempCanvas = document.createElement('canvas');
             const tempCtx = tempCanvas.getContext('2d');
             const nameFontSize = Math.max(Math.round(qrSize * 0.05), 12);
+            const snFontBuilder = (size) => `bold ${size}px "맑은 고딕", sans-serif`;
             let snFontSize = 0;
+            let snDescent = 0;
             let textAreaHeight = 0;
 
             if (includeInfo) {
-                const snText = `SN: ${snLabel}`;
-                const maxTextWidth = qrSize; // QR 크기 기준
-                snFontSize = Math.round(qrSize * 0.12);
-                tempCtx.font = `bold ${snFontSize}px "맑은 고딕", sans-serif`;
-                while (tempCtx.measureText(snText).width > maxTextWidth && snFontSize > 10) {
-                    snFontSize--;
-                    tempCtx.font = `bold ${snFontSize}px "맑은 고딕", sans-serif`;
-                }
-                // 텍스트 영역: 제품명 + 간격 + 시리얼넘버 + 하단 여백
-                textAreaHeight = nameFontSize + 8 + snFontSize + padding;
+                // 시리얼넘버 폰트를 QR 가로 폭에 꽉 차도록 확대/축소
+                snFontSize = fitFontSizeToWidth(
+                    tempCtx, snLabel, qrSize, snFontBuilder, 10, Math.round(qrSize * 0.5)
+                );
+                tempCtx.font = snFontBuilder(snFontSize);
+                const snMetrics = tempCtx.measureText(snLabel);
+                snDescent = Math.ceil(snMetrics.actualBoundingBoxDescent || snFontSize * 0.25);
+                // 텍스트 영역: 제품명 + 간격 + 시리얼넘버 + 디센더 + 하단 여백
+                textAreaHeight = nameFontSize + 8 + snFontSize + snDescent + padding;
             }
 
             const origWidth = qrSize + padding * 2;
@@ -2890,11 +3215,10 @@ async function downloadQRJpg() {
                 origCtx.font = `bold ${nameFontSize}px "맑은 고딕", sans-serif`;
                 origCtx.fillText(productName, origWidth / 2, textY + nameFontSize);
 
-                // 시리얼넘버
-                const snText = `SN: ${snLabel}`;
-                origCtx.font = `bold ${snFontSize}px "맑은 고딕", sans-serif`;
+                // 시리얼넘버 + 제품ID (QR 폭에 맞춘 큰 폰트)
+                origCtx.font = snFontBuilder(snFontSize);
                 origCtx.fillStyle = '#000000';
-                origCtx.fillText(snText, origWidth / 2, textY + nameFontSize + 8 + snFontSize);
+                origCtx.fillText(snLabel, origWidth / 2, textY + nameFontSize + 8 + snFontSize);
             }
 
             // 회전 적용 - 회전 후 정확한 바운딩 박스 계산
@@ -3012,29 +3336,59 @@ function initEditProductModal() {
     });
 
     // QR 다운로드 버튼 (시리얼넘버 포함)
-    downloadBtn.addEventListener('click', () => {
+    downloadBtn.addEventListener('click', async () => {
         if (!currentEditProduct) return;
 
-        const qrContainer = document.getElementById('editQrCode');
-        const qrCanvas = qrContainer.querySelector('canvas');
-        const qrImg = qrContainer.querySelector('img');
-        const sn = currentEditProduct.serialNumber || '';
+        const product = currentEditProduct;
+        const sn = getQRSerialLabel(product); // 시리얼넘버 + 제품ID
 
-        // QR 이미지 소스 확보
+        // 다운로드용 QR을 고해상도로 새로 생성 (모달의 120px QR을 확대하면 흐려짐)
+        const qrSize = 512;
+        const tempDiv = document.createElement('div');
+        tempDiv.style.cssText = 'position:absolute;left:-9999px;top:-9999px;';
+        document.body.appendChild(tempDiv);
+
         let qrSource = null;
-        if (qrCanvas) {
-            qrSource = qrCanvas;
-        } else if (qrImg) {
-            qrSource = qrImg;
+        try {
+            new QRCode(tempDiv, {
+                text: product.id,
+                width: qrSize,
+                height: qrSize,
+                colorDark: '#000000',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.H
+            });
+            await new Promise(r => setTimeout(r, 150));
+            qrSource = tempDiv.querySelector('canvas') || tempDiv.querySelector('img');
+        } catch (err) {
+            console.error('QR 생성 오류:', err);
         }
 
-        if (!qrSource) return;
+        if (!qrSource) {
+            document.body.removeChild(tempDiv);
+            showToast('QR 생성에 실패했습니다.', 'error');
+            return;
+        }
 
-        // 시리얼넘버 포함 캔버스 생성
-        const padding = 20;
-        const snHeight = 30;
-        const qrSize = 120;
+        // 시리얼넘버 포함 캔버스 생성 (고해상도로 출력)
+        const padding = Math.round(qrSize * 0.08);
         const totalWidth = qrSize + padding * 2;
+
+        // 시리얼넘버 폰트를 QR 가로 폭에 꽉 차도록 계산
+        const snFontBuilder = (size) => `bold ${size}px monospace`;
+        const measureCtx = document.createElement('canvas').getContext('2d');
+        let snFontSize = 0;
+        let snHeight = 0;
+        if (sn) {
+            snFontSize = fitFontSizeToWidth(
+                measureCtx, sn, qrSize, snFontBuilder, 10, Math.round(qrSize * 0.5)
+            );
+            measureCtx.font = snFontBuilder(snFontSize);
+            const m = measureCtx.measureText(sn);
+            const descent = Math.ceil(m.actualBoundingBoxDescent || snFontSize * 0.25);
+            snHeight = snFontSize + descent + Math.round(padding / 2);
+        }
+
         const totalHeight = qrSize + padding * 2 + snHeight;
 
         const dlCanvas = document.createElement('canvas');
@@ -3048,17 +3402,18 @@ function initEditProductModal() {
 
         // QR 코드 그리기
         ctx.drawImage(qrSource, padding, padding, qrSize, qrSize);
+        document.body.removeChild(tempDiv);
 
-        // 시리얼넘버 텍스트
+        // 시리얼넘버 + 제품ID 텍스트
         if (sn) {
-            ctx.fillStyle = '#374151';
-            ctx.font = 'bold 12px monospace';
+            ctx.fillStyle = '#000000';
+            ctx.font = snFontBuilder(snFontSize);
             ctx.textAlign = 'center';
-            ctx.fillText(sn, totalWidth / 2, qrSize + padding + snHeight - 6);
+            ctx.fillText(sn, totalWidth / 2, qrSize + padding + Math.round(padding / 4) + snFontSize);
         }
 
         const link = document.createElement('a');
-        link.download = `QR_${currentEditProduct.id}.png`;
+        link.download = `QR_${product.id}.png`;
         link.href = dlCanvas.toDataURL('image/png');
         link.click();
         showToast('QR코드가 다운로드되었습니다.', 'success');
@@ -3122,6 +3477,21 @@ function initEditProductModal() {
                 showToast('회수 후 잔여시간을 입력해주세요.', 'error');
                 return;
             }
+            // 잔여시간 음수/이상값 검증
+            const parsedRemaining = parseInt(returnHours);
+            if (isNaN(parsedRemaining) || parsedRemaining < 0) {
+                showToast('잔여시간은 0 이상의 숫자를 입력해주세요.', 'error');
+                return;
+            }
+            const productForCheck = products.find(p => p.id === currentEditProduct.id);
+            if (productForCheck) {
+                const prevRem = productForCheck.remainingHours || productForCheck.totalHours;
+                if (parsedRemaining > prevRem) {
+                    if (!confirm(`입력한 잔여시간(${parsedRemaining}h)이 회수 전 잔여시간(${prevRem}h)보다 큽니다.\n계속하시겠습니까?`)) {
+                        return;
+                    }
+                }
+            }
         }
 
         const productIndex = products.findIndex(p => p.id === currentEditProduct.id);
@@ -3135,7 +3505,7 @@ function initEditProductModal() {
             // === 수동 임대회수 처리 ===
             if (newStatus === '임대회수') {
                 const returnStatus = document.getElementById('editReturnStatus').value;
-                const newRemaining = parseInt(document.getElementById('editReturnHours').value) || 0;
+                const newRemaining = parseInt(document.getElementById('editReturnHours').value);
                 const previousRemaining = products[productIndex].remainingHours || products[productIndex].totalHours;
                 const usedHours = Math.abs(previousRemaining - newRemaining);
                 const company = products[productIndex].rentalCompany;
@@ -3354,10 +3724,10 @@ function showRentalHistory(productId) {
                     <div class="history-photos-section">
                         <div class="photos-label-row">
                             <p class="photos-label">임대 전 사진 (${rentalPhotos.length}장)</p>
-                            <button class="btn-photo-download" onclick="downloadAllPhotos(decodeURIComponent('${rentalPhotoData}'), '${esc(product.name)}_임대전_${rentalDate}')">전체 다운로드</button>
+                            <button class="btn-photo-download" onclick="downloadAllPhotos(decodeURIComponent('${escJs(rentalPhotoData)}'), '${escJs(product.name)}_임대전_${escJs(rentalDate)}')">전체 다운로드</button>
                         </div>
                         <div class="history-photos">
-                            ${rentalPhotos.map((p, i) => `<img src="${p}" alt="임대 전 ${i+1}" onclick="showPhotoModal('${p}')">`).join('')}
+                            ${rentalPhotos.map((p, i) => `<img src="${esc(p)}" alt="임대 전 ${i+1}" onclick="showPhotoModal('${escJs(p)}')">`).join('')}
                         </div>
                     </div>
                 `;
@@ -3372,24 +3742,24 @@ function showRentalHistory(productId) {
                     <div class="history-photos-section">
                         <div class="photos-label-row">
                             <p class="photos-label">회수 후 사진 (${returnPhotos.length}장)</p>
-                            <button class="btn-photo-download" onclick="downloadAllPhotos(decodeURIComponent('${returnPhotoData}'), '${esc(product.name)}_회수후_${returnDate}')">전체 다운로드</button>
+                            <button class="btn-photo-download" onclick="downloadAllPhotos(decodeURIComponent('${escJs(returnPhotoData)}'), '${escJs(product.name)}_회수후_${escJs(returnDate)}')">전체 다운로드</button>
                         </div>
                         <div class="history-photos">
-                            ${returnPhotos.map((p, i) => `<img src="${p}" alt="회수 후 ${i+1}" onclick="showPhotoModal('${p}')">`).join('')}
+                            ${returnPhotos.map((p, i) => `<img src="${esc(p)}" alt="회수 후 ${i+1}" onclick="showPhotoModal('${escJs(p)}')">`).join('')}
                         </div>
                     </div>
                 `;
             }
 
             return `
-                <div class="rental-history-item" data-index="${actualIndex}" data-product-id="${productId}">
+                <div class="rental-history-item" data-index="${actualIndex}" data-product-id="${esc(productId)}">
                     <div class="rental-history-header">
-                        <span class="rental-company">${record.company}</span>
-                        <span class="rental-date">${rentalDate} ~ ${returnDate}</span>
+                        <span class="rental-company">${esc(record.company)}</span>
+                        <span class="rental-date">${esc(rentalDate)} ~ ${esc(returnDate)}</span>
                     </div>
                     <div class="rental-history-details">
-                        <span>사용시간: ${usedHours}</span>
-                        <span class="history-note">비고: <span class="note-text">${note}</span></span>
+                        <span>사용시간: ${esc(usedHours)}</span>
+                        <span class="history-note">비고: <span class="note-text">${esc(note)}</span></span>
                     </div>
                     ${rentalPhotosHtml}
                     ${returnPhotosHtml}
@@ -3445,13 +3815,31 @@ function showRentalDeleteBtn(item) {
 }
 
 function deleteRentalRecord(productId, index) {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+
+    // 현재 임대 중인 기록은 삭제 차단
+    if (product.isRented && product.currentRentalIndex === index) {
+        showToast('현재 임대 중인 기록은 삭제할 수 없습니다.', 'error');
+        return;
+    }
+
     // 임대기록 모달을 먼저 닫아서 확인 모달이 보이도록 처리
     closeRentalHistoryModal();
 
     showModal('임대기록 삭제', '이 임대기록을 삭제하시겠습니까?', () => {
-        const product = products.find(p => p.id === productId);
-        if (product && product.rentalHistory && product.rentalHistory[index]) {
+        if (product.rentalHistory && product.rentalHistory[index]) {
             product.rentalHistory.splice(index, 1);
+
+            // currentRentalIndex 보정
+            if (product.currentRentalIndex !== null && product.currentRentalIndex !== undefined) {
+                if (index < product.currentRentalIndex) {
+                    product.currentRentalIndex--;
+                } else if (index === product.currentRentalIndex) {
+                    product.currentRentalIndex = null;
+                }
+            }
+
             saveProduct(product);
             // 삭제 후 임대기록 모달 다시 열기
             showRentalHistory(productId);
@@ -3468,7 +3856,7 @@ function showPhotoModal(src) {
     overlay.className = 'photo-modal-overlay';
     overlay.innerHTML = `
         <div class="photo-modal-content">
-            <img src="${src}" alt="확대 사진">
+            <img src="${esc(src)}" alt="확대 사진">
             <button class="photo-modal-close">×</button>
         </div>
     `;
@@ -3633,7 +4021,7 @@ function openEditProductModal(productId) {
         if (this.value === '임대회수') {
             const prevHours = product.remainingHours || product.totalHours;
             document.getElementById('editReturnUsedInfo').innerHTML =
-                `현재 임대: <strong>${product.rentalCompany}</strong> | 임대 전 잔여: <strong>${prevHours}시간</strong>`;
+                `현재 임대: <strong>${esc(product.rentalCompany)}</strong> | 임대 전 잔여: <strong>${prevHours}시간</strong>`;
         }
     };
 
@@ -3643,7 +4031,7 @@ function openEditProductModal(productId) {
         const newHours = parseInt(this.value) || 0;
         const used = Math.abs(prevHours - newHours);
         document.getElementById('editReturnUsedInfo').innerHTML =
-            `현재 임대: <strong>${product.rentalCompany}</strong> | ` +
+            `현재 임대: <strong>${esc(product.rentalCompany)}</strong> | ` +
             `${prevHours}시간 → ${newHours}시간 | ` +
             `<strong style="color:#dc2626;">실사용: ${used}시간</strong>`;
     };
@@ -3675,13 +4063,21 @@ function generateEditModalQR(productId) {
             correctLevel: QRCode.CorrectLevel.H
         });
 
-        // QR 하단에 시리얼넘버 표시
+        // QR 하단에 시리얼넘버 + 제품ID 표시 (QR 폭에 맞춰 폰트 확대)
         const product = products.find(p => p.id === productId);
-        if (product && product.serialNumber) {
+        const labelText = getQRSerialLabel(product);
+        if (labelText) {
             const snLabel = document.createElement('div');
             snLabel.className = 'qr-serial-number';
-            snLabel.textContent = product.serialNumber;
+            snLabel.textContent = labelText;
             qrContainer.appendChild(snLabel);
+
+            // 120px(QR 폭) 안에서 최대 크기로
+            const measureCtx = document.createElement('canvas').getContext('2d');
+            const labelFont = (size) => `700 ${size}px monospace`;
+            const fitted = fitFontSizeToWidth(measureCtx, labelText, 120, labelFont, 7, 28);
+            snLabel.style.fontSize = fitted + 'px';
+            snLabel.style.letterSpacing = '0';
         }
     } catch (e) {
         console.error('QR 생성 오류:', e);
@@ -3779,15 +4175,18 @@ function renderAdminHistory() {
         else if (item.type === '상태변경') badgeClass = 'type-status';
         else if (item.type === '제품등록') badgeClass = 'type-register';
         else if (item.type === '제품삭제') badgeClass = 'type-delete';
+        else if (item.type === '제품수정') badgeClass = 'type-edit';
 
         // 상세 정보
         let detail = '';
         if (item.type === '임대') {
             detail = `→ ${esc(item.company)}`;
         } else if (item.type === '임대회수') {
-            detail = `← ${esc(item.company)} | ${item.previousRemaining || 0}h→${item.newRemaining || 0}h | ${esc(item.status)}`;
+            detail = `← ${esc(item.company)} | ${esc(item.previousRemaining || 0)}h→${esc(item.newRemaining || 0)}h | ${esc(item.status)}`;
         } else if (item.type === '상태변경') {
             detail = `${esc(item.previousStatus)} → ${esc(item.newStatus)}`;
+        } else if (item.type === '제품수정') {
+            detail = esc(item.changes || item.productName);
         } else if (item.type === '제품등록' || item.type === '제품삭제') {
             detail = esc(item.productName);
         }

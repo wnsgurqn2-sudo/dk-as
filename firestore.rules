@@ -1,29 +1,95 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 제품
+
+    // ===== 공통 함수 =====
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // 총책임자는 이메일(인증 토큰)로 판별 - 문서 필드로 위조 불가
+    function isSuperAdmin() {
+      return isSignedIn() && request.auth.token.email == 'wnsgurqn2@gmail.com';
+    }
+
+    function myDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // 승인된 사용자만 데이터 접근 (미승인 계정 차단 - 서버측 강제)
+    function isApproved() {
+      return isSuperAdmin() ||
+             (isSignedIn() && myDoc().approved == true);
+    }
+
+    function isAdmin() {
+      return isSuperAdmin() ||
+             (isSignedIn() && myDoc().approved == true && myDoc().role == 'admin');
+    }
+
+    // 변경된 필드가 허용 목록 안에만 있는지
+    function onlyChanges(allowed) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+    }
+
+    // ===== 제품 =====
     match /products/{productId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isApproved();
     }
-    // 히스토리
+
+    // ===== 히스토리 =====
+    // 위조/삭제 방지: 본인 명의로 생성만 가능, 수정/삭제는 총책임자만
     match /history/{historyId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read: if isApproved();
+      allow create: if isApproved() &&
+                       request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSuperAdmin();
     }
-    // 사용자
+
+    // ===== 사용자 =====
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && (request.auth.uid == userId || request.auth.token.email == 'wnsgurqn2@gmail.com');
+      // 본인 문서는 승인 전에도 읽을 수 있어야 함 (승인 대기 화면 / 실시간 승인 감지)
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+
+      // 최초 가입: 반드시 미승인 + 일반 사용자로만 생성 (총책임자는 예외)
+      allow create: if isSuperAdmin() ||
+                       (isSignedIn() &&
+                        request.auth.uid == userId &&
+                        request.resource.data.email == request.auth.token.email &&
+                        request.resource.data.approved == false &&
+                        request.resource.data.role == 'user');
+
+      allow update: if isSuperAdmin() ||
+                       // 본인은 이름/부서/알림설정만 변경 가능
+                       // (approved, role, manualRentalPermission 변경 불가 = 권한 상승 차단)
+                       (isSignedIn() && request.auth.uid == userId &&
+                        onlyChanges(['name', 'department', 'notificationSettings'])) ||
+                       // 레거시 보정: role 필드가 아예 없던 계정이 'user'로만 채우는 경우
+                       (isSignedIn() && request.auth.uid == userId &&
+                        !('role' in resource.data) &&
+                        onlyChanges(['role']) &&
+                        request.resource.data.role == 'user');
+
+      allow delete: if isSuperAdmin();
 
       // FCM 토큰 (사용자 본인만)
       match /fcmTokens/{tokenId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
       }
     }
-    // 알림 (로그인 사용자 생성, Cloud Functions에서 처리)
+
+    // ===== 알림 =====
+    // actorUid 위조 차단: 본인 uid로만 생성 가능
+    // 읽기/수정/삭제는 Cloud Functions(Admin SDK)만 수행 - 규칙 우회됨
     match /notifications/{notificationId} {
-      allow create: if request.auth != null;
+      allow create: if isApproved() &&
+                       request.resource.data.actorUid == request.auth.uid;
       allow read, update, delete: if false;
+    }
+
+    // 그 외 모든 경로 차단
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

@@ -1,0 +1,19 @@
+# 의존성
+node_modules/
+
+# Firebase
+.firebase/
+*-debug.log
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# 로그 / 임시
+*.log
+.DS_Store
+Thumbs.db
+
+# 환경변수 (서비스 계정 키 등 비밀정보가 커밋되지 않도록)
+.env
+.env.*
+*serviceAccountKey*.json

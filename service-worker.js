@@ -42,8 +42,8 @@ self.addEventListener("notificationclick", (event) => {
 });
 
 // ===== PWA 캐시 =====
-const CACHE_NAME = 'dk-as-v68';
-const APP_VERSION = '68';
+const CACHE_NAME = 'dk-as-v76';
+const APP_VERSION = '76';
 const urlsToCache = [
   './',
   './index.html',

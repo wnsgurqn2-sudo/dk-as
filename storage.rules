@@ -1,0 +1,31 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // 총책임자는 인증 토큰의 이메일로 판별
+    function isSuperAdmin() {
+      return request.auth != null &&
+             request.auth.token.email == 'wnsgurqn2@gmail.com';
+    }
+
+    // Firestore의 승인 상태를 교차 확인 (미승인 계정 차단)
+    function isApproved() {
+      return isSuperAdmin() ||
+             (request.auth != null &&
+              firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.approved == true);
+    }
+
+    match /photos/{allPaths=**} {
+      allow read: if isApproved();
+      allow write: if isApproved() &&
+                      request.resource.size < 5 * 1024 * 1024 &&
+                      request.resource.contentType.matches('image/.*');
+      allow delete: if isApproved();
+    }
+
+    // 그 외 모든 경로 차단
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
