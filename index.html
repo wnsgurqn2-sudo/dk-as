@@ -22,7 +22,7 @@
     <link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152x152.png">
     <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192x192.png">
 
-    <link rel="stylesheet" href="styles.css?v=77">
+    <link rel="stylesheet" href="styles.css?v=78">
     <!-- Animate.css -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"
           integrity="sha384-Gu3KVV2H9d+yA4QDpVB7VcOyhJlAVrcXd0thEjr4KznfaFPLe0xQJyonVxONa4ZC"
@@ -42,7 +42,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js"></script>
-    <script src="firebase-config.js?v=77"></script>
+    <script src="firebase-config.js?v=78"></script>
     <!-- JSZip (사진 일괄 다운로드) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"
             integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG"
@@ -677,9 +677,18 @@
                 <div class="form-group">
                     <label for="editInfoSerial">시리얼넘버</label>
                     <div class="edit-info-serial-row">
-                        <input type="text" id="editInfoSerial" placeholder="예: SN-ABCD1234">
-                        <button type="button" class="btn-secondary" id="editInfoRegenSerial">재발급</button>
+                        <input type="text" id="editInfoSerial" placeholder="예: SN-ABCD1234" readonly>
+                        <button type="button" class="btn-secondary" id="editInfoSerialUnlock">변경</button>
                     </div>
+                    <div class="serial-edit-actions" id="editInfoSerialActions" style="display: none;">
+                        <button type="button" class="btn-secondary" id="editInfoRegenSerial">재발급</button>
+                        <button type="button" class="btn-secondary" id="editInfoSerialCancel">되돌리기</button>
+                    </div>
+                    <p class="serial-warning" id="editInfoSerialWarning" style="display: none;">
+                        시리얼넘버를 바꾸면 <strong>QR 하단에 인쇄되는 라벨</strong>이 달라집니다.
+                        이미 부착한 라벨은 다시 출력해야 하고, 기존 번호로는 검색되지 않습니다.
+                        <br>(QR 스캔 값은 제품ID라서 스캔 자체는 계속 동작합니다)
+                    </p>
                     <p class="form-help">QR 하단 라벨: <span id="editInfoLabelPreview">-</span></p>
                 </div>
                 <div class="form-group">
@@ -902,7 +911,7 @@
     </div>
 
     <!-- Neural Network 배경 -->
-    <script type="module" src="login-bg.js?v=77"></script>
+    <script type="module" src="login-bg.js?v=78"></script>
     <!-- 로그인 애니메이션 관리 -->
     <script>
         // 페이지 로드 후 안전하게 slideInUp 적용 (CDN 로딩 대기)
@@ -924,8 +933,8 @@
             }
         });
     </script>
-    <script src="notifications.js?v=77"></script>
-    <script src="app.js?v=77"></script>
+    <script src="notifications.js?v=78"></script>
+    <script src="app.js?v=78"></script>
     <script>
         // Service Worker 등록 (PWA 캐시 + FCM 통합)
         if ('serviceWorker' in navigator) {

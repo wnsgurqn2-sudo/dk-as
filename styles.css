@@ -774,6 +774,41 @@ body {
     cursor: not-allowed;
 }
 
+/* 시리얼넘버 잠금 상태 - 변경 버튼을 눌러야 편집 가능 */
+#editInfoSerial[readonly] {
+    background-color: var(--gray-100);
+    color: var(--gray-700);
+    cursor: default;
+}
+
+.serial-edit-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.serial-edit-actions .btn-secondary {
+    width: auto;
+    flex: 1 1 0;
+    padding: 9px 12px;
+    font-size: 13px;
+}
+
+.serial-warning {
+    margin-top: 8px;
+    padding: 10px 12px;
+    background-color: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: var(--radius);
+    font-size: 12px;
+    line-height: 1.5;
+    color: #92400e;
+}
+
+.serial-warning strong {
+    font-weight: 700;
+}
+
 #editInfoLabelPreview {
     font-family: monospace;
     font-weight: 700;

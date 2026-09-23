@@ -134,6 +134,21 @@ async function openInfoEditModal(productId) {
     await page.waitForSelector('#editProductInfoModal.show', { timeout: 10000 });
 }
 
+// 시리얼넘버는 기본 잠금 → 변경 버튼을 눌러야 편집 가능
+async function unlockSerial() {
+    await page.click('#editInfoSerialUnlock');
+    await page.waitForFunction(
+        () => !document.getElementById('editInfoSerial').readOnly,
+        { timeout: 5000 }
+    );
+}
+
+// 시리얼넘버를 바꿔 저장하면 확인 모달이 뜬다
+async function confirmSerialChange() {
+    await page.waitForSelector('#modalOverlay.show', { timeout: 10000 });
+    await page.click('#modalConfirm');
+}
+
 async function openProductModal(productId) {
     await gotoProductsTab();
     await page.click(`#productList .product-manage-item[data-id="${productId}"] .product-info`);
@@ -241,12 +256,81 @@ describe('1. 시리얼넘버 입력칸 노출 (회귀)', () => {
 });
 
 // ===================================================================
-describe('2. 시리얼넘버 변경', () => {
-    it('직접 입력해 변경하면 저장된다', async () => {
+describe('2. 시리얼넘버 변경 (잠금 + 확인)', () => {
+    it('모달을 열면 시리얼넘버가 잠겨 있다', async () => {
         await openInfoEditModal('U13');
+        const state = await page.evaluate(() => ({
+            readOnly: document.getElementById('editInfoSerial').readOnly,
+            unlockVisible: getComputedStyle(document.getElementById('editInfoSerialUnlock')).display !== 'none',
+            actionsHidden: getComputedStyle(document.getElementById('editInfoSerialActions')).display === 'none',
+            warningHidden: getComputedStyle(document.getElementById('editInfoSerialWarning')).display === 'none',
+        }));
+        assert.ok(state.readOnly, '읽기전용이어야 함');
+        assert.ok(state.unlockVisible, '변경 버튼이 보여야 함');
+        assert.ok(state.actionsHidden, '재발급/되돌리기는 숨겨져 있어야 함');
+        assert.ok(state.warningHidden, '경고문은 숨겨져 있어야 함');
+    });
+
+    it('변경 버튼을 누르면 편집 가능해지고 경고가 나타난다', async () => {
+        await unlockSerial();
+        const state = await page.evaluate(() => ({
+            readOnly: document.getElementById('editInfoSerial').readOnly,
+            unlockHidden: getComputedStyle(document.getElementById('editInfoSerialUnlock')).display === 'none',
+            actionsVisible: getComputedStyle(document.getElementById('editInfoSerialActions')).display !== 'none',
+            warningVisible: getComputedStyle(document.getElementById('editInfoSerialWarning')).display !== 'none',
+            warningText: document.getElementById('editInfoSerialWarning').textContent,
+        }));
+        assert.ok(!state.readOnly, '편집 가능해야 함');
+        assert.ok(state.unlockHidden, '변경 버튼은 숨겨져야 함');
+        assert.ok(state.actionsVisible, '재발급/되돌리기가 보여야 함');
+        assert.ok(state.warningVisible, '경고문이 보여야 함');
+        assert.match(state.warningText, /라벨/);
+    });
+
+    it('되돌리기를 누르면 원래 값으로 복구되고 다시 잠긴다', async () => {
+        await page.$eval('#editInfoSerial', el => { el.value = 'SN-TEMPVAL'; });
+        await page.click('#editInfoSerialCancel');
+        const state = await page.evaluate(() => ({
+            value: document.getElementById('editInfoSerial').value,
+            readOnly: document.getElementById('editInfoSerial').readOnly,
+        }));
+        assert.strictEqual(state.value, 'SN-BFTPZWLW', '원래 값으로 복구');
+        assert.ok(state.readOnly, '다시 잠겨야 함');
+        await page.click('#editInfoCancel');
+    });
+
+    it('잠긴 상태에서는 다른 항목만 저장되고 확인창이 안 뜬다', async () => {
+        await openInfoEditModal('U13');
+        await page.$eval('#editInfoName', el => { el.value = ''; });
+        await page.type('#editInfoName', 'SDG25S-수정');
+        await page.click('#editInfoSave');
+        await page.waitForFunction(
+            () => !document.getElementById('editProductInfoModal').classList.contains('show'),
+            { timeout: 10000 }
+        );
+        const saved = await readProduct('U13');
+        assert.strictEqual(saved.name, 'SDG25S-수정');
+        assert.strictEqual(saved.serialNumber, 'SN-BFTPZWLW', '시리얼넘버는 그대로');
+    });
+
+    it('시리얼넘버를 바꾸면 확인창이 뜨고, 확인해야 저장된다', async () => {
+        await openInfoEditModal('U13');
+        await unlockSerial();
         await page.$eval('#editInfoSerial', el => { el.value = ''; });
         await page.type('#editInfoSerial', 'SN-NEWSER01');
         await page.click('#editInfoSave');
+
+        // 확인창 내용 검증
+        await page.waitForSelector('#modalOverlay.show', { timeout: 10000 });
+        const dialog = await page.evaluate(() => ({
+            title: document.getElementById('modalTitle').textContent,
+            body: document.getElementById('modalBody').textContent,
+        }));
+        assert.match(dialog.title, /시리얼넘버 변경/);
+        assert.match(dialog.body, /SN-BFTPZWLW/, '기존 번호 표시');
+        assert.match(dialog.body, /SN-NEWSER01-U13/, '바뀔 라벨 표시');
+
+        await page.click('#modalConfirm');
         await page.waitForFunction(
             () => !document.getElementById('editProductInfoModal').classList.contains('show'),
             { timeout: 10000 }
@@ -256,11 +340,29 @@ describe('2. 시리얼넘버 변경', () => {
         assert.strictEqual(saved.serialNumber, 'SN-NEWSER01');
     });
 
+    it('확인창에서 취소하면 저장되지 않는다', async () => {
+        await openInfoEditModal('U13');
+        await unlockSerial();
+        await page.$eval('#editInfoSerial', el => { el.value = ''; });
+        await page.type('#editInfoSerial', 'SN-CANCELED');
+        await page.click('#editInfoSave');
+
+        await page.waitForSelector('#modalOverlay.show', { timeout: 10000 });
+        await page.click('#modalCancel');
+        await new Promise(r => setTimeout(r, 500));
+
+        const saved = await readProduct('U13');
+        assert.strictEqual(saved.serialNumber, 'SN-NEWSER01', '이전 값 유지');
+        await page.click('#editInfoCancel');
+    });
+
     it('SN- 접두사 없이 입력해도 자동으로 붙는다', async () => {
         await openInfoEditModal('U13');
+        await unlockSerial();
         await page.$eval('#editInfoSerial', el => { el.value = ''; });
         await page.type('#editInfoSerial', 'abcd1234');
         await page.click('#editInfoSave');
+        await confirmSerialChange();
         await page.waitForFunction(
             () => !document.getElementById('editProductInfoModal').classList.contains('show'),
             { timeout: 10000 }
@@ -272,6 +374,7 @@ describe('2. 시리얼넘버 변경', () => {
 
     it('재발급 버튼이 새 시리얼넘버를 생성한다', async () => {
         await openInfoEditModal('U13');
+        await unlockSerial();
         const before = await page.$eval('#editInfoSerial', el => el.value);
         await page.click('#editInfoRegenSerial');
         const after = await page.$eval('#editInfoSerial', el => el.value);
@@ -281,10 +384,12 @@ describe('2. 시리얼넘버 변경', () => {
 
         const preview = await page.$eval('#editInfoLabelPreview', el => el.textContent);
         assert.strictEqual(preview, `${after}-U13`, '미리보기도 갱신되어야 함');
+        await page.click('#editInfoCancel');
     });
 
     it('다른 제품이 쓰는 시리얼넘버는 거부된다', async () => {
         await openInfoEditModal('U13');
+        await unlockSerial();
         await page.$eval('#editInfoSerial', el => { el.value = ''; });
         await page.type('#editInfoSerial', 'SN-SECOND01'); // U32 가 사용 중
         await page.click('#editInfoSave');
@@ -296,6 +401,9 @@ describe('2. 시리얼넘버 변경', () => {
         const msg = await page.$eval('#toast', el => el.textContent);
         assert.match(msg, /이미 사용 중/);
 
+        const dialogShown = await page.$eval('#modalOverlay', el => el.classList.contains('show'));
+        assert.ok(!dialogShown, '검증 실패 시 확인창이 뜨면 안 됨');
+
         const stillOpen = await page.$eval('#editProductInfoModal', el => el.classList.contains('show'));
         assert.ok(stillOpen, '거부되었으므로 모달이 열려 있어야 함');
 
@@ -304,6 +412,7 @@ describe('2. 시리얼넘버 변경', () => {
 
     it('시리얼넘버를 바꿔도 기존 데이터가 보존된다', async () => {
         const saved = await readProduct('U13');
+        assert.strictEqual(saved.category, '디젤발전기', '카테고리 보존');
         assert.strictEqual(saved.status, '출고준비완료', '상태 보존');
         assert.strictEqual(saved.createdAt, BASE_PRODUCT.createdAt, '생성일 보존');
         assert.strictEqual(saved.rentalHistory.length, 1, '임대기록 보존');
@@ -317,11 +426,14 @@ describe('2. 시리얼넘버 변경', () => {
 describe('3. 제품 사진 등록/조회/삭제', () => {
     // 1x1 PNG 를 파일로 만들어 input 에 올린다
     const pngPath = path.join(require('os').tmpdir(), 'dkas-test-photo.png');
-    before(() => {
+    let beforeUpload = null; // 업로드 직전 상태 (앞 테스트 결과에 의존하지 않도록 스냅샷 비교)
+
+    before(async () => {
         fs.writeFileSync(pngPath, Buffer.from(
             'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
             'base64'
         ));
+        beforeUpload = await readProduct('U13');
     });
 
     it('제품정보 모달에 사진 영역이 있고, 처음엔 비어 있다', async () => {
@@ -352,9 +464,19 @@ describe('3. 제품 사진 등록/조회/삭제', () => {
 
     it('사진 등록이 기존 제품 데이터를 망가뜨리지 않는다', async () => {
         const saved = await readProduct('U13');
-        assert.strictEqual(saved.name, 'SDG25S', '제품명 보존');
+
+        // productPhotos / lastUpdated 외의 모든 필드가 업로드 전과 동일해야 한다
+        const ignore = new Set(['productPhotos', 'lastUpdated']);
+        for (const key of Object.keys(beforeUpload)) {
+            if (ignore.has(key)) continue;
+            assert.deepStrictEqual(
+                saved[key], beforeUpload[key],
+                `${key} 필드가 보존되어야 함`
+            );
+        }
+
+        // 핵심 필드는 명시적으로도 확인
         assert.strictEqual(saved.status, '출고준비완료', '상태 보존');
-        assert.strictEqual(saved.totalHours, 1000, '사용가능시간 보존');
         assert.strictEqual(saved.createdAt, BASE_PRODUCT.createdAt, '생성일 보존');
         assert.strictEqual(saved.rentalHistory.length, 1, '임대기록 보존');
         assert.strictEqual(saved.repairHistory.length, 1, '수리기록 보존');

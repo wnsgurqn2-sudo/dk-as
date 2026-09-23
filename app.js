@@ -2638,6 +2638,7 @@ function updateProductList() {
 
 // ===== 제품 정보 수정 (제품관리 탭) =====
 let currentInfoEditProduct = null;
+let originalSerial = '';   // 모달을 열 때의 시리얼넘버 (되돌리기/변경감지용)
 
 function initProductInfoModal() {
     const modal = document.getElementById('editProductInfoModal');
@@ -2652,6 +2653,18 @@ function initProductInfoModal() {
     document.getElementById('editInfoCancel').addEventListener('click', close);
     modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
 
+    // 시리얼넘버 변경 잠금 해제 (QR 라벨이 바뀌므로 의도적으로 한 단계 둠)
+    document.getElementById('editInfoSerialUnlock').addEventListener('click', () => {
+        setSerialEditable(true);
+    });
+
+    // 되돌리기: 원래 값으로 복구하고 다시 잠금
+    document.getElementById('editInfoSerialCancel').addEventListener('click', () => {
+        document.getElementById('editInfoSerial').value = originalSerial;
+        updateInfoLabelPreview();
+        setSerialEditable(false);
+    });
+
     // 시리얼넘버 재발급
     document.getElementById('editInfoRegenSerial').addEventListener('click', () => {
         document.getElementById('editInfoSerial').value = generateSerialNumber();
@@ -2662,6 +2675,25 @@ function initProductInfoModal() {
     document.getElementById('editInfoSerial').addEventListener('input', updateInfoLabelPreview);
 
     document.getElementById('editInfoSave').addEventListener('click', saveProductInfo);
+}
+
+// 시리얼넘버 입력칸 잠금/해제
+function setSerialEditable(editable) {
+    const input = document.getElementById('editInfoSerial');
+    const unlockBtn = document.getElementById('editInfoSerialUnlock');
+    const actions = document.getElementById('editInfoSerialActions');
+    const warning = document.getElementById('editInfoSerialWarning');
+    if (!input || !unlockBtn || !actions || !warning) return;
+
+    input.readOnly = !editable;
+    unlockBtn.style.display = editable ? 'none' : '';
+    actions.style.display = editable ? '' : 'none';
+    warning.style.display = editable ? '' : 'none';
+
+    if (editable) {
+        input.focus();
+        input.select();
+    }
 }
 
 function updateInfoLabelPreview() {
@@ -2683,8 +2715,12 @@ function openProductInfoModal(productId) {
     document.getElementById('editInfoTotalHours').value = product.totalHours ?? 0;
     document.getElementById('editInfoRemainingHours').value =
         product.remainingHours ?? product.totalHours ?? 0;
-    document.getElementById('editInfoSerial').value = product.serialNumber || '';
+    originalSerial = product.serialNumber || '';
+    document.getElementById('editInfoSerial').value = originalSerial;
     document.getElementById('editInfoNote').value = product.note || '';
+
+    // 시리얼넘버는 항상 잠긴 상태로 시작 (실수로 바뀌는 것 방지)
+    setSerialEditable(false);
 
     updateInfoLabelPreview();
     document.getElementById('editProductInfoModal').classList.add('show');
@@ -2747,6 +2783,31 @@ async function saveProductInfo() {
         showToast('변경사항이 없습니다.', 'error');
         return;
     }
+
+    const payload = { name, category, totalHours, remainingHours, serialNumber, note, changes };
+
+    // 시리얼넘버가 바뀌면 QR 라벨을 다시 출력해야 하므로 한 번 더 확인
+    if (serialNumber !== originalSerial) {
+        showModal(
+            '시리얼넘버 변경 확인',
+            `<div style="line-height:1.7;">
+                <div><strong>${esc(originalSerial || '(없음)')}</strong> → <strong style="color:#2563eb;">${esc(serialNumber || '(없음)')}</strong></div>
+                <div style="margin-top:10px;padding:10px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:13px;color:#92400e;">
+                    QR 하단 라벨이 <strong>${esc(getQRSerialLabel({ ...product, serialNumber }))}</strong> 로 바뀝니다.<br>
+                    이미 부착한 라벨은 다시 출력해야 하고, 기존 번호로는 검색되지 않습니다.
+                </div>
+                <div style="margin-top:8px;font-size:13px;color:#666;">QR 스캔 값은 제품ID라서 스캔 자체는 계속 동작합니다.</div>
+            </div>`,
+            () => persistProductInfo(product, payload)
+        );
+        return;
+    }
+
+    await persistProductInfo(product, payload);
+}
+
+async function persistProductInfo(product, payload) {
+    const { name, category, totalHours, remainingHours, serialNumber, note, changes } = payload;
 
     const saveBtn = document.getElementById('editInfoSave');
     saveBtn.disabled = true;
