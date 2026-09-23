@@ -22,7 +22,7 @@
     <link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152x152.png">
     <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192x192.png">
 
-    <link rel="stylesheet" href="styles.css?v=78">
+    <link rel="stylesheet" href="styles.css?v=79">
     <!-- Animate.css -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"
           integrity="sha384-Gu3KVV2H9d+yA4QDpVB7VcOyhJlAVrcXd0thEjr4KznfaFPLe0xQJyonVxONa4ZC"
@@ -42,7 +42,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js"></script>
-    <script src="firebase-config.js?v=78"></script>
+    <script src="firebase-config.js?v=79"></script>
     <!-- JSZip (사진 일괄 다운로드) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"
             integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG"
@@ -655,8 +655,20 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label for="editInfoId">제품 ID</label>
-                    <input type="text" id="editInfoId" readonly>
-                    <p class="form-help">제품 ID는 QR코드 값이라 변경할 수 없습니다.</p>
+                    <div class="edit-info-serial-row">
+                        <input type="text" id="editInfoId" readonly>
+                        <button type="button" class="btn-secondary" id="editInfoIdUnlock">변경</button>
+                    </div>
+                    <div class="serial-edit-actions" id="editInfoIdActions" style="display: none;">
+                        <button type="button" class="btn-secondary" id="editInfoIdCancel">되돌리기</button>
+                    </div>
+                    <p class="serial-warning danger" id="editInfoIdWarning" style="display: none;">
+                        제품 ID는 <strong>QR코드에 인코딩되는 값</strong>입니다.
+                        바꾸면 <strong>이미 출력한 QR코드가 모두 무효</strong>가 되어 스캔이 안 됩니다.
+                        반드시 QR을 다시 출력해 부착하세요.
+                        <br>기존 히스토리 기록은 예전 ID로 남습니다.
+                    </p>
+                    <p class="form-help" id="editInfoIdHelp">제품 ID는 QR코드 값입니다. 바꾸려면 변경 버튼을 누르세요.</p>
                 </div>
                 <div class="form-group">
                     <label for="editInfoName">제품명 *</label>
@@ -911,7 +923,7 @@
     </div>
 
     <!-- Neural Network 배경 -->
-    <script type="module" src="login-bg.js?v=78"></script>
+    <script type="module" src="login-bg.js?v=79"></script>
     <!-- 로그인 애니메이션 관리 -->
     <script>
         // 페이지 로드 후 안전하게 slideInUp 적용 (CDN 로딩 대기)
@@ -933,8 +945,8 @@
             }
         });
     </script>
-    <script src="notifications.js?v=78"></script>
-    <script src="app.js?v=78"></script>
+    <script src="notifications.js?v=79"></script>
+    <script src="app.js?v=79"></script>
     <script>
         // Service Worker 등록 (PWA 캐시 + FCM 통합)
         if ('serviceWorker' in navigator) {

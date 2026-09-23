@@ -2638,7 +2638,8 @@ function updateProductList() {
 
 // ===== 제품 정보 수정 (제품관리 탭) =====
 let currentInfoEditProduct = null;
-let originalSerial = '';   // 모달을 열 때의 시리얼넘버 (되돌리기/변경감지용)
+let originalSerial = '';      // 모달을 열 때의 시리얼넘버 (되돌리기/변경감지용)
+let originalProductId = '';   // 모달을 열 때의 제품 ID (되돌리기/변경감지용)
 
 function initProductInfoModal() {
     const modal = document.getElementById('editProductInfoModal');
@@ -2652,6 +2653,16 @@ function initProductInfoModal() {
     document.getElementById('editInfoClose').addEventListener('click', close);
     document.getElementById('editInfoCancel').addEventListener('click', close);
     modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+
+    // 제품 ID 변경 잠금 해제 (QR 자체가 무효화되므로 의도적으로 한 단계 둠)
+    document.getElementById('editInfoIdUnlock').addEventListener('click', () => {
+        setProductIdEditable(true);
+    });
+
+    document.getElementById('editInfoIdCancel').addEventListener('click', () => {
+        document.getElementById('editInfoId').value = originalProductId;
+        setProductIdEditable(false);
+    });
 
     // 시리얼넘버 변경 잠금 해제 (QR 라벨이 바뀌므로 의도적으로 한 단계 둠)
     document.getElementById('editInfoSerialUnlock').addEventListener('click', () => {
@@ -2675,6 +2686,27 @@ function initProductInfoModal() {
     document.getElementById('editInfoSerial').addEventListener('input', updateInfoLabelPreview);
 
     document.getElementById('editInfoSave').addEventListener('click', saveProductInfo);
+}
+
+// 제품 ID 입력칸 잠금/해제
+function setProductIdEditable(editable) {
+    const input = document.getElementById('editInfoId');
+    const unlockBtn = document.getElementById('editInfoIdUnlock');
+    const actions = document.getElementById('editInfoIdActions');
+    const warning = document.getElementById('editInfoIdWarning');
+    const help = document.getElementById('editInfoIdHelp');
+    if (!input || !unlockBtn || !actions || !warning) return;
+
+    input.readOnly = !editable;
+    unlockBtn.style.display = editable ? 'none' : '';
+    actions.style.display = editable ? '' : 'none';
+    warning.style.display = editable ? '' : 'none';
+    if (help) help.style.display = editable ? 'none' : '';
+
+    if (editable) {
+        input.focus();
+        input.select();
+    }
 }
 
 // 시리얼넘버 입력칸 잠금/해제
@@ -2709,7 +2741,9 @@ function openProductInfoModal(productId) {
 
     currentInfoEditProduct = product;
 
+    originalProductId = product.id;
     document.getElementById('editInfoId').value = product.id;
+    setProductIdEditable(false);   // 제품 ID도 항상 잠긴 상태로 시작
     document.getElementById('editInfoName').value = product.name || '';
     document.getElementById('editInfoCategory').value = product.category || '';
     document.getElementById('editInfoTotalHours').value = product.totalHours ?? 0;
@@ -2731,6 +2765,7 @@ async function saveProductInfo() {
 
     const product = currentInfoEditProduct;
 
+    const newId = document.getElementById('editInfoId').value.trim();
     const name = document.getElementById('editInfoName').value.trim();
     const category = document.getElementById('editInfoCategory').value.trim() || '기타';
     const totalHoursRaw = document.getElementById('editInfoTotalHours').value;
@@ -2739,6 +2774,19 @@ async function saveProductInfo() {
     const note = document.getElementById('editInfoNote').value.trim();
 
     // 검증
+    if (!newId) {
+        showToast('제품 ID를 입력해주세요.', 'error');
+        return;
+    }
+    // Firestore 문서 ID 제약 + QR 인코딩 안전성
+    if (!/^[A-Za-z0-9_-]{1,50}$/.test(newId)) {
+        showToast('제품 ID는 영문/숫자/-/_ 조합 1~50자여야 합니다.', 'error');
+        return;
+    }
+    if (newId !== originalProductId && products.some(p => p.id === newId)) {
+        showToast('이미 사용 중인 제품 ID입니다.', 'error');
+        return;
+    }
     if (!name) {
         showToast('제품명을 입력해주세요.', 'error');
         return;
@@ -2770,6 +2818,7 @@ async function saveProductInfo() {
 
     // 변경 내역 수집 (히스토리용)
     const changes = [];
+    if (newId !== originalProductId) changes.push(`제품ID: ${originalProductId} → ${newId}`);
     if ((product.name || '') !== name) changes.push(`제품명: ${product.name || '-'} → ${name}`);
     if ((product.category || '') !== category) changes.push(`카테고리: ${product.category || '-'} → ${category}`);
     if ((product.totalHours ?? 0) !== totalHours) changes.push(`사용가능시간: ${product.totalHours ?? 0}h → ${totalHours}h`);
@@ -2784,10 +2833,36 @@ async function saveProductInfo() {
         return;
     }
 
-    const payload = { name, category, totalHours, remainingHours, serialNumber, note, changes };
+    const payload = { newId, name, category, totalHours, remainingHours, serialNumber, note, changes };
+
+    const idChanged = newId !== originalProductId;
+    const serialChanged = serialNumber !== originalSerial;
+
+    // 제품 ID 변경은 QR 자체가 무효화되므로 가장 강한 확인
+    if (idChanged) {
+        const newLabel = getQRSerialLabel({ ...product, id: newId, serialNumber });
+        showModal(
+            '제품 ID 변경 확인',
+            `<div style="line-height:1.7;">
+                <div><strong>${esc(originalProductId)}</strong> → <strong style="color:#dc2626;">${esc(newId)}</strong></div>
+                <div style="margin-top:10px;padding:10px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:13px;color:#991b1b;">
+                    <strong>이미 출력한 QR코드는 모두 무효가 됩니다.</strong><br>
+                    기존 QR을 스캔하면 "등록되지 않은 제품"으로 나옵니다.
+                    반드시 QR을 다시 출력해 부착하세요.
+                </div>
+                <div style="margin-top:8px;font-size:13px;color:#666;">
+                    새 QR 하단 라벨: <strong>${esc(newLabel)}</strong><br>
+                    기존 히스토리 기록은 예전 ID(${esc(originalProductId)})로 남습니다.<br>
+                    임대·수리 기록과 사진은 그대로 따라갑니다.
+                </div>
+            </div>`,
+            () => persistProductInfo(product, payload)
+        );
+        return;
+    }
 
     // 시리얼넘버가 바뀌면 QR 라벨을 다시 출력해야 하므로 한 번 더 확인
-    if (serialNumber !== originalSerial) {
+    if (serialChanged) {
         showModal(
             '시리얼넘버 변경 확인',
             `<div style="line-height:1.7;">
@@ -2806,29 +2881,79 @@ async function saveProductInfo() {
     await persistProductInfo(product, payload);
 }
 
+// 제품 ID 이전: Firestore 는 문서 ID 를 바꿀 수 없으므로
+// 새 ID 로 문서를 만들고 옛 문서를 지운다 (배치로 원자적 처리).
+async function migrateProductId(product, newId, updatedFields) {
+    // 서버에도 중복이 없는지 한 번 더 확인 (다른 기기에서 먼저 만들었을 수 있음)
+    const existing = await db.collection('products').doc(newId).get();
+    if (existing.exists) {
+        throw new Error(`이미 사용 중인 제품 ID입니다: ${newId}`);
+    }
+
+    const oldId = product.id;
+    const newData = {
+        ...product,
+        ...updatedFields,
+        id: newId,
+        previousIds: [...(product.previousIds || []), oldId],
+        lastUpdated: new Date().toISOString()
+    };
+
+    const batch = db.batch();
+    batch.set(db.collection('products').doc(newId), newData);
+    batch.delete(db.collection('products').doc(oldId));
+    await batch.commit();
+
+    return newData;
+}
+
 async function persistProductInfo(product, payload) {
-    const { name, category, totalHours, remainingHours, serialNumber, note, changes } = payload;
+    const { newId, name, category, totalHours, remainingHours, serialNumber, note, changes } = payload;
 
     const saveBtn = document.getElementById('editInfoSave');
     saveBtn.disabled = true;
     saveBtn.textContent = '저장 중...';
 
-    try {
-        // 로컬 데이터 갱신 (기존 필드는 그대로 유지)
-        product.name = name;
-        product.category = category;
-        product.totalHours = totalHours;
-        product.remainingHours = remainingHours;
-        product.serialNumber = serialNumber || product.serialNumber || generateSerialNumber();
-        product.note = note;
-        product.lastUpdated = new Date().toISOString();
+    const oldId = product.id;
+    const idChanged = newId && newId !== oldId;
 
-        await saveProduct(product);
+    try {
+        const updatedFields = {
+            name,
+            category,
+            totalHours,
+            remainingHours,
+            serialNumber: serialNumber || product.serialNumber || generateSerialNumber(),
+            note,
+            lastUpdated: new Date().toISOString()
+        };
+
+        if (idChanged) {
+            // 새 ID 로 문서를 옮기고 옛 문서를 삭제 (모든 필드 그대로 이동)
+            const migrated = await migrateProductId(product, newId, updatedFields);
+
+            // 로컬 목록의 해당 항목을 교체
+            const idx = products.findIndex(p => p.id === oldId);
+            if (idx !== -1) products[idx] = migrated;
+            else products.push(migrated);
+
+            // 스캔 중이던 제품이 같은 것이면 참조 갱신
+            if (currentScannedProduct && currentScannedProduct.id === oldId) {
+                currentScannedProduct = migrated;
+            }
+            if (currentEditProduct && currentEditProduct.id === oldId) {
+                currentEditProduct = migrated;
+            }
+        } else {
+            // 로컬 데이터 갱신 (기존 필드는 그대로 유지)
+            Object.assign(product, updatedFields);
+            await saveProduct(product);
+        }
 
         addHistory({
             type: '제품수정',
-            productId: product.id,
-            productName: product.name,
+            productId: idChanged ? newId : product.id,
+            productName: name,
             changes: changes.join(' | '),
             time: new Date().toISOString()
         });

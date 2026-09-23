@@ -423,6 +423,164 @@ describe('2. 시리얼넘버 변경 (잠금 + 확인)', () => {
 });
 
 // ===================================================================
+describe('4. 제품 ID 변경', () => {
+    async function readRaw(id) {
+        let d = null;
+        await testEnv.withSecurityRulesDisabled(async (c) => {
+            const s = await c.firestore().doc(`products/${id}`).get();
+            d = s.exists ? s.data() : null;
+        });
+        return d;
+    }
+
+    it('모달을 열면 제품 ID가 잠겨 있다', async () => {
+        await openInfoEditModal('U32');
+        const state = await page.evaluate(() => ({
+            readOnly: document.getElementById('editInfoId').readOnly,
+            unlockVisible: getComputedStyle(document.getElementById('editInfoIdUnlock')).display !== 'none',
+            warningHidden: getComputedStyle(document.getElementById('editInfoIdWarning')).display === 'none',
+        }));
+        assert.ok(state.readOnly, '읽기전용이어야 함');
+        assert.ok(state.unlockVisible, '변경 버튼이 보여야 함');
+        assert.ok(state.warningHidden, '경고문은 숨겨져 있어야 함');
+    });
+
+    it('변경 버튼을 누르면 QR 무효화 경고가 나타난다', async () => {
+        await page.click('#editInfoIdUnlock');
+        await page.waitForFunction(() => !document.getElementById('editInfoId').readOnly, { timeout: 5000 });
+        const w = await page.evaluate(() => {
+            const el = document.getElementById('editInfoIdWarning');
+            return { visible: getComputedStyle(el).display !== 'none', text: el.textContent, danger: el.classList.contains('danger') };
+        });
+        assert.ok(w.visible, '경고문이 보여야 함');
+        assert.ok(w.danger, '위험 스타일이어야 함');
+        assert.match(w.text, /QR코드가 모두 무효/);
+    });
+
+    it('되돌리기를 누르면 원래 ID로 복구되고 다시 잠긴다', async () => {
+        await page.$eval('#editInfoId', el => { el.value = 'TEMPID'; });
+        await page.click('#editInfoIdCancel');
+        const state = await page.evaluate(() => ({
+            value: document.getElementById('editInfoId').value,
+            readOnly: document.getElementById('editInfoId').readOnly,
+        }));
+        assert.strictEqual(state.value, 'U32');
+        assert.ok(state.readOnly);
+        await page.click('#editInfoCancel');
+    });
+
+    it('이미 쓰는 ID는 거부된다', async () => {
+        await openInfoEditModal('U32');
+        await page.click('#editInfoIdUnlock');
+        await page.waitForFunction(() => !document.getElementById('editInfoId').readOnly);
+        await page.$eval('#editInfoId', el => { el.value = 'U13'; }); // 다른 제품이 사용 중
+        await page.click('#editInfoSave');
+
+        await page.waitForFunction(() => document.getElementById('toast').classList.contains('show'), { timeout: 5000 });
+        const msg = await page.$eval('#toast', el => el.textContent);
+        assert.match(msg, /이미 사용 중인 제품 ID/);
+        await page.click('#editInfoCancel');
+    });
+
+    it('허용되지 않는 문자는 거부된다', async () => {
+        await openInfoEditModal('U32');
+        await page.click('#editInfoIdUnlock');
+        await page.waitForFunction(() => !document.getElementById('editInfoId').readOnly);
+        await page.$eval('#editInfoId', el => { el.value = 'U 32/x'; });
+        await page.click('#editInfoSave');
+
+        await page.waitForFunction(() => document.getElementById('toast').classList.contains('show'), { timeout: 5000 });
+        const msg = await page.$eval('#toast', el => el.textContent);
+        assert.match(msg, /영문\/숫자/);
+        await page.click('#editInfoCancel');
+    });
+
+    it('확인창에서 취소하면 ID가 바뀌지 않는다', async () => {
+        await openInfoEditModal('U32');
+        await page.click('#editInfoIdUnlock');
+        await page.waitForFunction(() => !document.getElementById('editInfoId').readOnly);
+        await page.$eval('#editInfoId', el => { el.value = 'U99-CANCEL'; });
+        await page.click('#editInfoSave');
+
+        await page.waitForSelector('#modalOverlay.show', { timeout: 10000 });
+        await page.click('#modalCancel');
+        await new Promise(r => setTimeout(r, 500));
+
+        assert.ok(await readRaw('U32'), '원래 문서가 남아 있어야 함');
+        assert.strictEqual(await readRaw('U99-CANCEL'), null, '새 문서가 생기면 안 됨');
+        await page.click('#editInfoCancel');
+    });
+
+    it('ID를 바꾸면 확인창이 뜨고, 확인하면 문서가 이전된다', async () => {
+        const before = await readRaw('U32');
+
+        await openInfoEditModal('U32');
+        await page.click('#editInfoIdUnlock');
+        await page.waitForFunction(() => !document.getElementById('editInfoId').readOnly);
+        await page.$eval('#editInfoId', el => { el.value = 'U32-NEW'; });
+        await page.click('#editInfoSave');
+
+        await page.waitForSelector('#modalOverlay.show', { timeout: 10000 });
+        const dialog = await page.evaluate(() => ({
+            title: document.getElementById('modalTitle').textContent,
+            body: document.getElementById('modalBody').textContent,
+        }));
+        assert.match(dialog.title, /제품 ID 변경/);
+        assert.match(dialog.body, /U32/);
+        assert.match(dialog.body, /무효/);
+
+        await page.click('#modalConfirm');
+        await page.waitForFunction(
+            () => !document.getElementById('editProductInfoModal').classList.contains('show'),
+            { timeout: 15000 }
+        );
+
+        const moved = await readRaw('U32-NEW');
+        const old = await readRaw('U32');
+        assert.ok(moved, '새 ID 문서가 생성되어야 함');
+        assert.strictEqual(old, null, '옛 ID 문서는 삭제되어야 함');
+        assert.strictEqual(moved.id, 'U32-NEW', 'id 필드도 갱신되어야 함');
+
+        // 모든 기존 데이터가 따라와야 한다
+        const ignore = new Set(['id', 'previousIds', 'lastUpdated']);
+        for (const key of Object.keys(before)) {
+            if (ignore.has(key)) continue;
+            assert.deepStrictEqual(moved[key], before[key], `${key} 필드가 보존되어야 함`);
+        }
+        assert.deepStrictEqual(moved.previousIds, ['U32'], '이전 ID 가 기록되어야 함');
+    });
+
+    it('목록과 QR이 새 ID로 갱신된다', async () => {
+        await gotoProductsTab();
+        const ids = await page.$$eval('#productList .product-manage-item', els => els.map(e => e.dataset.id));
+        assert.ok(ids.includes('U32-NEW'), '목록에 새 ID가 보여야 함');
+        assert.ok(!ids.includes('U32'), '옛 ID는 사라져야 함');
+
+        await openProductModal('U32-NEW');
+        const label = await page.$eval('#editQrCode .qr-serial-number', el => el.textContent);
+        assert.match(label, /-U32-NEW$/, 'QR 하단 라벨이 새 ID 를 써야 함');
+        await page.click('#editModalCancel');
+    });
+
+    it('원래 ID로 되돌릴 수 있다 (뒷정리)', async () => {
+        await openInfoEditModal('U32-NEW');
+        await page.click('#editInfoIdUnlock');
+        await page.waitForFunction(() => !document.getElementById('editInfoId').readOnly);
+        await page.$eval('#editInfoId', el => { el.value = 'U32'; });
+        await page.click('#editInfoSave');
+        await page.waitForSelector('#modalOverlay.show', { timeout: 10000 });
+        await page.click('#modalConfirm');
+        await page.waitForFunction(
+            () => !document.getElementById('editProductInfoModal').classList.contains('show'),
+            { timeout: 15000 }
+        );
+        const back = await readRaw('U32');
+        assert.ok(back, '원래 ID 로 복귀');
+        assert.deepStrictEqual(back.previousIds, ['U32', 'U32-NEW'], '변경 이력이 누적되어야 함');
+    });
+});
+
+// ===================================================================
 describe('3. 제품 사진 등록/조회/삭제', () => {
     // 1x1 PNG 를 파일로 만들어 input 에 올린다
     const pngPath = path.join(require('os').tmpdir(), 'dkas-test-photo.png');

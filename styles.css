@@ -774,11 +774,19 @@ body {
     cursor: not-allowed;
 }
 
-/* 시리얼넘버 잠금 상태 - 변경 버튼을 눌러야 편집 가능 */
-#editInfoSerial[readonly] {
+/* 시리얼넘버·제품ID 잠금 상태 - 변경 버튼을 눌러야 편집 가능 */
+#editInfoSerial[readonly],
+#editInfoId[readonly] {
     background-color: var(--gray-100);
     color: var(--gray-700);
     cursor: default;
+}
+
+/* 잠금 해제 상태는 일반 입력칸처럼 */
+#editInfoId:not([readonly]) {
+    background-color: var(--white);
+    color: var(--gray-900);
+    cursor: text;
 }
 
 .serial-edit-actions {
@@ -807,6 +815,13 @@ body {
 
 .serial-warning strong {
     font-weight: 700;
+}
+
+/* 제품 ID 변경은 QR 무효화라 더 강한 경고 */
+.serial-warning.danger {
+    background-color: #fef2f2;
+    border-color: #fecaca;
+    color: #991b1b;
 }
 
 #editInfoLabelPreview {
