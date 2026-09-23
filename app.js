@@ -77,6 +77,15 @@ function generateSerialNumber() {
     return 'SN-' + sn;
 }
 
+// 시리얼넘버 입력값 정규화: 대문자화 + SN- 접두사 자동 부여 + 허용문자만
+function normalizeSerial(raw) {
+    let s = String(raw || '').trim().toUpperCase();
+    if (!s) return '';
+    s = s.replace(/^SN-?/, '');          // 기존 접두사 제거 (SN, SN- 모두)
+    s = s.replace(/[^A-Z0-9]/g, '');     // 영문/숫자만 남김
+    return s ? 'SN-' + s : '';
+}
+
 // ===== QR 하단 라벨 (시리얼넘버 + 제품ID) =====
 function getQRSerialLabel(product) {
     if (!product) return '';
@@ -169,6 +178,17 @@ function initFirebase() {
     }
 }
 
+// ===== 전역 오류 안전망 =====
+// 저장 실패가 조용히 묻혀 "저장했는데 새로고침하면 되돌아감" 증상이 생기던 것을 방지
+window.addEventListener('unhandledrejection', (event) => {
+    const e = event.reason;
+    console.error('처리되지 않은 오류:', e);
+    if (typeof showToast === 'function' && e && e.code) {
+        showToast(describeFirestoreError(e, '작업 실패'), 'error');
+    }
+    event.preventDefault(); // 콘솔 중복 출력 방지
+});
+
 // ===== 초기화 =====
 document.addEventListener('DOMContentLoaded', () => {
     if (!initFirebase()) {
@@ -183,26 +203,71 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    initAuth();
-    initTabs();
-    initProductForm();
-    initBulkRegister();
-    initFilters();
-    initSearch();
-    initQRGenerator();
-    initModal();
-    initEditProductModal();
-    initProductInfoModal();
-    initRentalHistoryModal();
-    initRepairHistoryModal();
-    initPhotoCapture();
-    initEditPhotoCapture();
-    initDeleteAll();
-    initScanActions();
-    initSettings();
-    initUserManage();
-    initQRPrint();
+    checkRequiredLibraries();
+
+    // 초기화 함수 하나가 실패해도 나머지는 계속 등록되도록 격리
+    // (예전에는 중간에 예외가 나면 이후 기능이 전부 죽었음)
+    const initSteps = [
+        ['인증', initAuth],
+        ['탭', initTabs],
+        ['제품등록', initProductForm],
+        ['일괄등록', initBulkRegister],
+        ['필터', initFilters],
+        ['검색', initSearch],
+        ['QR생성', initQRGenerator],
+        ['공용모달', initModal],
+        ['제품정보모달', initEditProductModal],
+        ['제품수정모달', initProductInfoModal],
+        ['임대기록모달', initRentalHistoryModal],
+        ['수리기록모달', initRepairHistoryModal],
+        ['사진촬영', initPhotoCapture],
+        ['사진촬영(편집)', initEditPhotoCapture],
+        ['제품사진', initProductPhotos],
+        ['전체삭제', initDeleteAll],
+        ['스캔동작', initScanActions],
+        ['설정', initSettings],
+        ['사용자관리', initUserManage],
+        ['QR프린트', initQRPrint]
+    ];
+
+    const failed = [];
+    initSteps.forEach(([name, fn]) => {
+        try {
+            fn();
+        } catch (e) {
+            failed.push(name);
+            console.error(`초기화 실패 [${name}]:`, e);
+        }
+    });
+
+    if (failed.length > 0) {
+        console.error('초기화되지 않은 기능:', failed.join(', '));
+        setTimeout(() => {
+            showToast(`일부 기능 초기화 실패: ${failed.join(', ')}`, 'error');
+        }, 1000);
+    }
 });
+
+// 외부 CDN 라이브러리 로드 확인 (SRI 불일치/네트워크 차단 시 원인을 명확히)
+function checkRequiredLibraries() {
+    const libs = [
+        ['QRCode', 'QR 코드 생성'],
+        ['Html5Qrcode', 'QR 스캔'],
+        ['ExcelJS', 'QR 엑셀 내보내기'],
+        ['JSZip', '사진 일괄 다운로드']
+    ];
+    const missing = libs
+        .filter(([global]) => typeof window[global] === 'undefined')
+        .map(([, label]) => label);
+
+    if (missing.length > 0) {
+        console.error('외부 라이브러리 로드 실패:', missing.join(', '));
+        setTimeout(() => {
+            showToast(`라이브러리 로드 실패 - ${missing.join(', ')} 사용 불가`, 'error');
+        }, 1500);
+    }
+    return missing;
+}
 
 // ===== 인증 관리 =====
 let pendingApprovalUnsubscribe = null;
@@ -914,6 +979,197 @@ function clearEditPhotos() {
     updateEditPhotoList('editReturn');
 }
 
+// ===== 제품 사진 (제품 정보 모달) =====
+// 기존 필드는 건드리지 않고 productPhotos 필드만 merge 로 추가/갱신한다.
+function initProductPhotos() {
+    const cameraBtn = document.getElementById('productPhotoCameraBtn');
+    const galleryBtn = document.getElementById('productPhotoGalleryBtn');
+    const cameraInput = document.getElementById('productPhotoCameraInput');
+    const galleryInput = document.getElementById('productPhotoGalleryInput');
+    if (!cameraBtn || !galleryBtn || !cameraInput || !galleryInput) return;
+
+    cameraBtn.addEventListener('click', () => {
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        if (isMobile) {
+            cameraInput.setAttribute('capture', 'environment');
+        } else {
+            cameraInput.removeAttribute('capture');
+        }
+        cameraInput.click();
+    });
+    galleryBtn.addEventListener('click', () => galleryInput.click());
+
+    cameraInput.addEventListener('change', handleProductPhotoSelect);
+    galleryInput.addEventListener('change', handleProductPhotoSelect);
+}
+
+// 현재 모달에 열린 제품의 사진 목록 렌더링
+function renderProductPhotos() {
+    const listDiv = document.getElementById('productPhotoList');
+    const countEl = document.getElementById('productPhotoCount');
+    const emptyEl = document.getElementById('productPhotoEmpty');
+    if (!listDiv || !countEl) return;
+
+    const photos = (currentEditProduct && currentEditProduct.productPhotos) || [];
+    countEl.textContent = photos.length;
+    if (emptyEl) emptyEl.style.display = photos.length === 0 ? '' : 'none';
+
+    listDiv.innerHTML = photos.map((url, index) => `
+        <div class="photo-item">
+            <img src="${esc(url)}" alt="제품 사진 ${index + 1}" onclick="showPhotoModal('${escJs(url)}')">
+            <button type="button" class="photo-delete-btn" title="삭제"
+                    onclick="deleteProductPhoto(${index})">×</button>
+        </div>
+    `).join('');
+}
+
+function setProductPhotoProgress(percent, text) {
+    const wrap = document.getElementById('productPhotoProgress');
+    const fill = document.getElementById('productPhotoProgressFill');
+    const label = document.getElementById('productPhotoProgressText');
+    if (!wrap || !fill || !label) return;
+    if (percent === null) {
+        wrap.style.display = 'none';
+        return;
+    }
+    wrap.style.display = '';
+    fill.style.width = `${percent}%`;
+    label.textContent = text || `업로드 중... ${percent}%`;
+}
+
+function setProductPhotoButtonsDisabled(disabled) {
+    ['productPhotoCameraBtn', 'productPhotoGalleryBtn'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = disabled;
+    });
+}
+
+async function handleProductPhotoSelect(event) {
+    const input = event.target;
+    const files = input.files;
+    if (!files || files.length === 0) return;
+    if (!currentEditProduct) {
+        input.value = '';
+        return;
+    }
+
+    // 모달이 닫히거나 다른 제품으로 바뀌어도 올바른 제품에 저장되도록 고정
+    const product = currentEditProduct;
+    const existing = Array.isArray(product.productPhotos) ? product.productPhotos : [];
+    const remainingSlots = MAX_PHOTOS - existing.length;
+
+    if (remainingSlots <= 0) {
+        showToast(`최대 ${MAX_PHOTOS}장까지만 등록 가능합니다.`, 'error');
+        input.value = '';
+        return;
+    }
+
+    const filesToProcess = Array.from(files).slice(0, remainingSlots);
+    input.value = '';
+
+    setProductPhotoButtonsDisabled(true);
+    setProductPhotoProgress(0, '사진 준비 중...');
+
+    try {
+        // 1) 파일 → 리사이즈된 base64
+        const base64List = await Promise.all(
+            filesToProcess.map(file => new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    try {
+                        resolve(await resizeImage(e.target.result));
+                    } catch (err) {
+                        reject(err);
+                    }
+                };
+                reader.onerror = () => reject(new Error('파일을 읽지 못했습니다.'));
+                reader.readAsDataURL(file);
+            }))
+        );
+
+        // 2) Storage 업로드
+        const uploaded = await uploadPhotosToStorage(
+            base64List, product.id, 'product',
+            (percent) => setProductPhotoProgress(percent)
+        );
+
+        if (uploaded.length === 0) {
+            showToast('사진 업로드에 실패했습니다.', 'error');
+            return;
+        }
+
+        // 3) Firestore 에 productPhotos 만 merge 저장 (다른 필드는 그대로 보존)
+        setProductPhotoProgress(100, '저장 중...');
+        const merged = existing.concat(uploaded);
+        await db.collection('products').doc(product.id).set(
+            { productPhotos: merged, lastUpdated: new Date().toISOString() },
+            { merge: true }
+        );
+
+        // 4) 로컬 상태 동기화
+        product.productPhotos = merged;
+        const inList = products.find(p => p.id === product.id);
+        if (inList && inList !== product) inList.productPhotos = merged;
+
+        if (currentEditProduct && currentEditProduct.id === product.id) {
+            renderProductPhotos();
+        }
+
+        const skipped = files.length - filesToProcess.length;
+        showToast(
+            skipped > 0
+                ? `${uploaded.length}장 등록됨 (최대 ${MAX_PHOTOS}장, ${skipped}장 제외)`
+                : `${uploaded.length}장이 등록되었습니다.`,
+            'success'
+        );
+    } catch (e) {
+        console.error('제품 사진 등록 오류:', e);
+        showToast(describeFirestoreError(e, '사진 등록 실패'), 'error');
+    } finally {
+        setProductPhotoProgress(null);
+        setProductPhotoButtonsDisabled(false);
+    }
+}
+
+function deleteProductPhoto(index) {
+    if (!currentEditProduct) return;
+    const product = currentEditProduct;
+    const photos = Array.isArray(product.productPhotos) ? product.productPhotos : [];
+    const url = photos[index];
+    if (!url) return;
+
+    showModal('사진 삭제', '이 사진을 삭제하시겠습니까?', async () => {
+        const remaining = photos.filter((_, i) => i !== index);
+        try {
+            await db.collection('products').doc(product.id).set(
+                { productPhotos: remaining, lastUpdated: new Date().toISOString() },
+                { merge: true }
+            );
+
+            product.productPhotos = remaining;
+            const inList = products.find(p => p.id === product.id);
+            if (inList && inList !== product) inList.productPhotos = remaining;
+
+            if (currentEditProduct && currentEditProduct.id === product.id) {
+                renderProductPhotos();
+            }
+
+            // Storage 원본도 정리 (실패해도 목록에서는 이미 제거됨)
+            try {
+                await storageInstance.refFromURL(url).delete();
+            } catch (storageErr) {
+                console.warn('Storage 사진 삭제 실패 (무시됨):', storageErr);
+            }
+
+            showToast('사진이 삭제되었습니다.', 'success');
+        } catch (e) {
+            console.error('사진 삭제 오류:', e);
+            showToast(describeFirestoreError(e, '사진 삭제 실패'), 'error');
+        }
+    });
+}
+window.deleteProductPhoto = deleteProductPhoto;
+
 // 전역 함수 노출
 window.deletePhoto = deletePhoto;
 window.deleteEditPhoto = deleteEditPhoto;
@@ -953,8 +1209,24 @@ async function loadData() {
         });
     } catch (e) {
         console.error('데이터 로드 오류:', e);
-        showToast('데이터를 불러오는 중 오류가 발생했습니다.', 'error');
+        showToast(describeFirestoreError(e, '데이터를 불러오지 못했습니다'), 'error');
     }
+}
+
+// Firestore 오류를 사용자가 이해할 수 있는 문구로 변환
+// 특히 보안 규칙 거부(permission-denied)를 명확히 구분해 원인 파악을 빠르게 함
+function describeFirestoreError(e, prefix) {
+    const code = e && e.code ? String(e.code) : '';
+    if (code.includes('permission-denied')) {
+        return `${prefix}: 접근 권한이 없습니다. 관리자 승인 상태를 확인해주세요.`;
+    }
+    if (code.includes('unauthenticated')) {
+        return `${prefix}: 로그인이 만료되었습니다. 다시 로그인해주세요.`;
+    }
+    if (code.includes('unavailable') || code.includes('deadline-exceeded')) {
+        return `${prefix}: 네트워크 연결을 확인해주세요.`;
+    }
+    return `${prefix}: ${e && e.message ? e.message : '알 수 없는 오류'}`;
 }
 
 // Firestore 배치는 작업 500개가 한계 → 청크로 나눠 커밋
@@ -986,7 +1258,8 @@ async function saveData() {
 function saveProduct(product) {
     return db.collection('products').doc(product.id).set(product, { merge: true }).catch(e => {
         console.error('제품 저장 오류:', e);
-        showToast('저장 중 오류가 발생했습니다.', 'error');
+        showToast(describeFirestoreError(e, '저장 실패'), 'error');
+        throw e;
     });
 }
 
@@ -1737,6 +2010,10 @@ function addHistory(record) {
     // Firestore에 히스토리 저장
     db.collection('history').add(record).catch(e => {
         console.error('히스토리 저장 오류:', e);
+        // 권한 거부는 규칙 문제이므로 사용자에게 알림 (그 외 일시 오류는 조용히 무시)
+        if (e && String(e.code || '').includes('permission-denied')) {
+            showToast('기록 저장 권한이 없습니다. 관리자에게 문의하세요.', 'error');
+        }
     });
 
     updateHistoryList();
@@ -2390,7 +2667,7 @@ function initProductInfoModal() {
 function updateInfoLabelPreview() {
     const preview = document.getElementById('editInfoLabelPreview');
     if (!preview || !currentInfoEditProduct) return;
-    const sn = document.getElementById('editInfoSerial').value.trim().toUpperCase();
+    const sn = normalizeSerial(document.getElementById('editInfoSerial').value);
     preview.textContent = getQRSerialLabel({ ...currentInfoEditProduct, serialNumber: sn }) || '-';
 }
 
@@ -2422,7 +2699,7 @@ async function saveProductInfo() {
     const category = document.getElementById('editInfoCategory').value.trim() || '기타';
     const totalHoursRaw = document.getElementById('editInfoTotalHours').value;
     const remainingHoursRaw = document.getElementById('editInfoRemainingHours').value;
-    const serialNumber = document.getElementById('editInfoSerial').value.trim().toUpperCase();
+    const serialNumber = normalizeSerial(document.getElementById('editInfoSerial').value);
     const note = document.getElementById('editInfoNote').value.trim();
 
     // 검증
@@ -2444,6 +2721,10 @@ async function saveProductInfo() {
     }
     if (remainingHours > totalHours) {
         showToast('잔여시간은 사용가능시간보다 클 수 없습니다.', 'error');
+        return;
+    }
+    if (serialNumber && !/^SN-[A-Z0-9]{2,20}$/.test(serialNumber)) {
+        showToast('시리얼넘버는 영문/숫자 2~20자로 입력해주세요. (예: SN-AB12CD34)', 'error');
         return;
     }
     if (serialNumber && products.some(p => p.id !== product.id && p.serialNumber === serialNumber)) {
@@ -3046,8 +3327,6 @@ async function exportQRExcel() {
             currentRow += 2; // 다음 제품으로 (QR행 + SN행)
         }
 
-        document.body.removeChild(tempDiv);
-
         // 파일 다운로드
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -3063,6 +3342,8 @@ async function exportQRExcel() {
         console.error('엑셀 내보내기 실패:', e);
         showToast('엑셀 내보내기 실패: ' + e.message, 'error');
     } finally {
+        // 오류가 나도 임시 DOM이 남지 않도록 정리
+        if (tempDiv.parentNode) document.body.removeChild(tempDiv);
         btn.disabled = false;
         btn.textContent = '엑셀 내보내기';
     }
@@ -3256,12 +3537,13 @@ async function downloadQRJpg() {
             }
         }
 
-        document.body.removeChild(tempDiv);
         showToast(`${downloadCount}개 QR 코드 JPG가 다운로드되었습니다.`, 'success');
     } catch (e) {
         console.error('JPG 다운로드 실패:', e);
         showToast('JPG 다운로드 실패: ' + e.message, 'error');
     } finally {
+        // 오류가 나도 임시 DOM이 남지 않도록 정리
+        if (tempDiv.parentNode) document.body.removeChild(tempDiv);
         btn.disabled = false;
         btn.textContent = 'JPG 다운로드';
     }
@@ -3350,6 +3632,9 @@ function initEditProductModal() {
 
         let qrSource = null;
         try {
+            if (typeof QRCode === 'undefined') {
+                throw new Error('QR 라이브러리가 로드되지 않았습니다.');
+            }
             new QRCode(tempDiv, {
                 text: product.id,
                 width: qrSize,
@@ -3365,7 +3650,7 @@ function initEditProductModal() {
         }
 
         if (!qrSource) {
-            document.body.removeChild(tempDiv);
+            if (tempDiv.parentNode) document.body.removeChild(tempDiv);
             showToast('QR 생성에 실패했습니다.', 'error');
             return;
         }
@@ -3402,7 +3687,7 @@ function initEditProductModal() {
 
         // QR 코드 그리기
         ctx.drawImage(qrSource, padding, padding, qrSize, qrSize);
-        document.body.removeChild(tempDiv);
+        if (tempDiv.parentNode) document.body.removeChild(tempDiv);
 
         // 시리얼넘버 + 제품ID 텍스트
         if (sn) {
@@ -4040,6 +4325,9 @@ function openEditProductModal(productId) {
 
     // QR코드 생성
     generateEditModalQR(productId);
+
+    // 제품 사진 표시
+    renderProductPhotos();
 
     document.getElementById('editProductModal').classList.add('show');
 }

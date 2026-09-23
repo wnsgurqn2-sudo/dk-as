@@ -42,8 +42,8 @@ self.addEventListener("notificationclick", (event) => {
 });
 
 // ===== PWA 캐시 =====
-const CACHE_NAME = 'dk-as-v76';
-const APP_VERSION = '76';
+const CACHE_NAME = 'dk-as-v77';
+const APP_VERSION = '77';
 const urlsToCache = [
   './',
   './index.html',
@@ -60,11 +60,18 @@ const urlsToCache = [
 
 // 설치 시 캐시
 self.addEventListener('install', (event) => {
+  // 새 버전을 대기시키지 않고 즉시 활성화 (배포 후 구버전이 남는 문제 방지)
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
         console.log('캐시 열림');
-        return cache.addAll(urlsToCache);
+        // addAll은 하나라도 실패하면 전체가 실패 → 개별 처리로 변경
+        return Promise.allSettled(
+          urlsToCache.map((url) =>
+            cache.add(url).catch((e) => console.log('캐시 건너뜀:', url, e.message))
+          )
+        );
       })
       .catch((error) => {
         console.log('캐시 실패:', error);
@@ -84,9 +91,8 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 // 요청 가로채기 - 네트워크 우선, 실패 시 캐시

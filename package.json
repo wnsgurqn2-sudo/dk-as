@@ -1,0 +1,28 @@
+{
+  "name": "dk-as-tests",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test:unit": "node --test tests/unit.test.js",
+    "test:rules": "firebase emulators:exec --only firestore,storage --project dk-as-rules-test \"node --test --test-concurrency=1 tests/*.rules.test.js\"",
+    "test:ui": "firebase emulators:exec --only auth,firestore,storage --project dk-as-rules-test \"node --test --test-concurrency=1 tests/ui/*.test.js\"",
+    "test": "npm run test:unit && npm run test:rules && npm run test:ui"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wnsgurqn2-sudo/dk-as.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/wnsgurqn2-sudo/dk-as/issues"
+  },
+  "homepage": "https://github.com/wnsgurqn2-sudo/dk-as#readme",
+  "private": "true",
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "puppeteer": "^25.11.0"
+  }
+}
